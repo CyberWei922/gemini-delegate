@@ -5,20 +5,35 @@ import signal
 import sys
 import tempfile
 import unittest
+from unittest import mock
 import urllib.error
 import urllib.request
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'server'))
-from dashboard import CHILDREN, ensure_dashboard, public_task, read_tasks
+from dashboard import CHILDREN, LoopbackServer, ensure_dashboard, public_task, read_tasks
 
 
 class DashboardTests(unittest.TestCase):
+    def test_loopback_binding_does_not_require_reverse_dns(self):
+        from http.server import BaseHTTPRequestHandler
+        with mock.patch('socket.getfqdn',side_effect=RuntimeError('DNS unavailable')):
+            server=LoopbackServer(('127.0.0.1',0),BaseHTTPRequestHandler)
+        try:
+            self.assertEqual(server.server_name,'127.0.0.1')
+            self.assertGreater(server.server_port,0)
+        finally:server.server_close()
+
     def test_loopback_server_reuses_instance_and_requires_token(self):
         with tempfile.TemporaryDirectory() as d:
             state=Path(d)
             pid=None
             try:
-                url=ensure_dashboard(state)
+                try:
+                    url=ensure_dashboard(state)
+                except RuntimeError as error:
+                    log=state/'dashboard.log'
+                    diagnostic=log.read_text()[-2000:] if log.exists() else 'No startup log'
+                    self.fail(str(error)+'\n'+diagnostic)
                 config=json.loads((state/'dashboard.json').read_text())
                 pid=config['pid']
                 self.assertEqual(url,ensure_dashboard(state))

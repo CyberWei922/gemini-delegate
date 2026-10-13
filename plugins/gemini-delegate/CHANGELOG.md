@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.1 — 2026-10-14
+
+- Removed unnecessary reverse DNS from the loopback monitor bind and increased
+  its startup deadline to 20 seconds; added DNS-independent binding and startup
+  failure diagnostics tests.
+- Verification: both automated suites rerun locally and in the GitHub CI matrix;
+  AGY worker behavior is unchanged from the live-tested 1.2.0 release.
+
 ## 1.2.0 — 2026-10-14
 
 - Added portable public packaging, MIT licensing and repository installation

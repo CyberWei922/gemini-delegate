@@ -1,8 +1,8 @@
-# Release verification: 1.2.0
+# Release verification: 1.2.1
 
 Date: 2026-10-14. Verification used macOS, Python 3.14 and Codex CLI 0.162.1.
 
-- 19 runtime tests: strict output/schema handling, cancellation/deadline process
+- 20 runtime tests: strict output/schema handling, cancellation/deadline process
   cleanup, public URL checks, staged edits/conflicts/backups, private previews,
   live records/recovery, monitor access and runtime environment paths.
 - 9 installer/package tests using temporary homes and a simulated Codex CLI:
@@ -28,3 +28,8 @@ Windows, or native Gemini subagent activity-list integration. No browser
 substitute or GPT bridge was added. Full registration tests use a simulated CLI
 to avoid changing existing user registrations; real staged MCP startup and AGY
 inference were tested separately.
+
+The real AGY smoke result above was obtained from 1.2.0. Release 1.2.1 only
+changes optional monitor binding/startup and test diagnostics; its AGY inference
+worker is unchanged. The first CI run found the five-second monitor startup
+limit insufficient on macOS; the corrected release is checked in CI again.

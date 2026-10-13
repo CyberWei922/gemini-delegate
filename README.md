@@ -3,7 +3,7 @@
 让 Codex 通过本机官方 Antigravity CLI（AGY），把独立的简单任务交给
 **Gemini 3.8 Flash High**。GPT 负责复杂规划、逻辑判断和最终复核。
 
-版本 **1.2.0** · MIT 开源 · 独立社区项目，由 CyberWei922 发起、AI 辅助开发。
+版本 **1.2.1** · MIT 开源 · 独立社区项目，由 CyberWei922 发起、AI 辅助开发。
 本项目不隶属于 Google 或 OpenAI。
 
 ## 把链接交给 Codex 安装

@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import secrets
+from socketserver import TCPServer
 import subprocess
 import sys
 import time
@@ -15,6 +16,15 @@ import urllib.request
 
 TERMINAL = {'completed', 'failed', 'cancelled', 'interrupted'}
 CHILDREN = []
+
+
+class LoopbackServer(ThreadingHTTPServer):
+    def server_bind(self):
+        # HTTPServer normally reverse-resolves its bind address for a display
+        # name. A loopback-only monitor must also start when DNS is unavailable.
+        TCPServer.server_bind(self)
+        self.server_name = '127.0.0.1'
+        self.server_port = self.server_address[1]
 
 
 def public_task(data):
@@ -94,7 +104,9 @@ def ensure_dashboard(state):
             CHILDREN.append(process)
             process.stdin.write(token.encode())
             process.stdin.close()
-        deadline = time.monotonic() + 5
+        # Cold interpreter/library startup on hosted macOS runners can exceed
+        # five seconds. This affects only the explicitly requested monitor.
+        deadline = time.monotonic() + 20
         while time.monotonic() < deadline:
             if process.poll() is not None:
                 raise RuntimeError('Task monitor failed to start; see dashboard.log')
@@ -151,7 +163,7 @@ def serve(state, token):
             self.end_headers()
             self.wfile.write(payload)
 
-    server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+    server = LoopbackServer(('127.0.0.1', 0), Handler)
     config = state / 'dashboard.json'
     data = {'state': str(state), 'pid': os.getpid(), 'token': token,
             'url': 'http://127.0.0.1:' + str(server.server_port) + '/?token=' + token}
