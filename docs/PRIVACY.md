@@ -8,7 +8,9 @@ service or telemetry endpoint.
 
 The local task directory retains short titles, model/status/usage metadata,
 results, evidence URLs and hashes, staged replacements and backups. Input
-bundles are deleted after execution. Original and staged file contents can remain
+manifests and all raw text snapshot parts are deleted after execution. Timeout
+diagnostics retain only timings, error codes and partial-output byte counts, not
+the partial stdout/stderr contents. Original and staged file contents can remain
 in the results/backups needed for applying edits. Progress previews are bounded;
 edit previews omit full replacement contents. Do not send secrets or private
 material unless you intend to send it to Google through your own account.

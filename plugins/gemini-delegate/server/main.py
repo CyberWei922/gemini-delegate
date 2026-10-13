@@ -15,7 +15,8 @@ TASK_SCHEMA = {'type':'object','properties':{
     'search_query':{'type':'string','description':'Optional public web research query through the existing Agent Reach Exa backend.'},
     'response_type':{'type':'string','enum':['text','json','edit'],'default':'text','description':'edit returns staged replacements of explicit input files; apply after primary review.'},
     'result_schema':{'type':'object','description':'Optional JSON result contract. Supports type/properties/required/additionalProperties/items/minItems/maxItems/enum/const/minimum/maximum/minLength/maxLength/pattern. No $ref or combinators.'},
-    'timeout_seconds':{'type':'integer','minimum':15,'maximum':600,'default':180}
+    'timeout_seconds':{'type':'integer','minimum':15,'maximum':600,'default':180,'description':'Overall execution budget for source retrieval, shared AGY slot waiting and all attempts; begins when the queued worker starts.'},
+    'attempt_timeout_seconds':{'type':'integer','minimum':15,'maximum':600,'description':'Optional first-attempt cap. Default uses the remaining overall budget, without a hidden 75-second cap. One timeout retry is allowed only with a larger budget.'}
 },'required':['instruction'],'additionalProperties':False}
 
 TOOLS = [

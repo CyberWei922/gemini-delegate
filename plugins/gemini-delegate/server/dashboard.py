@@ -30,7 +30,7 @@ class LoopbackServer(ThreadingHTTPServer):
 def public_task(data):
     keys = ('id', 'title', 'status', 'model', 'workspace', 'created_at',
             'started_at', 'agy_started_at', 'finished_at', 'updated_at',
-            'elapsed_seconds', 'attempts', 'usage', 'error', 'applied_at',
+            'elapsed_seconds', 'input_parts', 'attempts', 'usage', 'error', 'applied_at',
             'owner_pid', 'result_preview', 'result_truncated')
     task = {k: data[k] for k in keys if k in data}
     task.setdefault('title', '历史任务 · ' + str(data.get('id', '')))

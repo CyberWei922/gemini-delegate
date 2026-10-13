@@ -79,7 +79,13 @@ worker and evidence trail, not a different model or paid API fallback.
      schema when field names/counts matter. Set minItems=maxItems for exact batch
      coverage. Supported schema keywords are described by the tool.
    - Local files: supply `workspace` and explicit `input_files`. The plugin
-     reads those files and gives the worker an isolated task bundle.
+     reads those files and gives the worker a small manifest with lossless,
+     bounded UTF-8 text parts. Keep tasks narrow and request concise output;
+     use 300–600 seconds when several large files must be read in High.
+   - `timeout_seconds` bounds retrieval, shared-slot waiting and all attempts
+     once execution starts. Default 180 seconds; no hidden per-call 75-second
+     cap. `attempt_timeout_seconds` optionally caps the first call and permits
+     a timeout retry only with a strictly longer remaining call budget.
    - Research: provide public `web_urls` or `search_query`. The plugin fetches
      public pages through a read-only adapter. Search uses the user's existing
      Agent Reach/Exa backend. It neither changes global AGY web permissions nor
@@ -112,8 +118,10 @@ worker and evidence trail, not a different model or paid API fallback.
 The wrapper rejects nonzero exits, non-SUCCESS statuses, soft permission denials,
 empty results, partial timeout output, malformed JSON, schema/count mismatches,
 unexpected file paths and stale originals. It uses both an AGY timeout and a hard
-process-group deadline, and permits at most one retry on recoverable output or
-timeout failures. No model downgrade occurs. A failed result must not be reported
+process-group deadline, and permits at most one retry on recoverable output
+failures. Default full-budget timeouts are not blindly retried; an explicitly
+capped first attempt can retry only with a longer budget, rechecked after slot
+waiting. Validation retries include the specific error. No model downgrade occurs. A failed result must not be reported
 as completed work. Cancel unneeded tasks with `cancel_task`.
 
 If authentication, quota, search connectivity or a permission fails, identify the

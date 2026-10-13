@@ -15,8 +15,16 @@ the exact `gemini-3.8-flash-high` model. No third-party Python dependencies.
 The worker fixes this High model and invokes AGY with bounded print mode, JSON
 output, sandbox hints and an isolated worker agent. An AGY process is serialized
 across chats and killed as a process group on cancellation/hard timeout. A
-recoverable failure may retry once. The wrapper rejects soft-denied, empty or
+recoverable output failure may retry once. A timeout retry requires an explicitly
+bounded first attempt and a strictly longer available retry budget. The wrapper rejects soft-denied, empty or
 partial-timeout success envelopes and validates structured results.
+
+The default 180-second overall execution budget includes retrieval, shared-slot
+waiting and all attempts after the worker starts. Each call uses the remaining
+budget; there is no hidden 75-second cap. `attempt_timeout_seconds` (CLI:
+`--attempt-timeout`) optionally caps the first call; a retry can use up to twice
+that cap, bounded by the remaining total budget and rechecked after slot waiting.
+Cancellation/process cleanup may take a short additional grace period.
 
 Optional environment overrides: `GEMINI_DELEGATE_AGY` and
 `GEMINI_DELEGATE_STATE_DIR`. The installer records the detected values in its
@@ -28,7 +36,10 @@ addresses independently and requires certificate-verified HTTPS. Optional search
 uses an existing Exa/mcporter backend, not one installed by this bundle.
 
 Only explicitly supplied UTF-8 files up to 128 KiB are read, within the given
-workspace. Original content is excluded from live progress records. Edits are
+workspace. Original content is excluded from live progress records. Inputs are
+read through a small manifest and raw UTF-8 parts of at most 24 KiB, preserving
+line endings and multibyte characters. Long context, search and webpage text use
+the same snapshots; all parts and the manifest are deleted after execution. Edits are
 returned as candidates; application requires review, unchanged original/artifact
 hashes, backups and conflict checks. JSON schema success is not semantic proof.
 

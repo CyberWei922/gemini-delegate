@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.2.2 — 2026-10-14
+
+- Replaced escaped one-line input bundles with a bounded manifest and lossless
+  UTF-8 text snapshots up to 24 KiB each; preserve real line breaks and page
+  truncated tool views. Remove all input snapshots after execution.
+- Removed the hidden 75-second attempt cap. By default AGY uses the remaining
+  overall budget, calculated after acquiring the shared slot. Added an explicit
+  optional first-attempt cap with deadline-bounded timeout retries only when a
+  longer next attempt is possible, rechecked after slot waiting.
+- Added validation-specific retry feedback, per-attempt timing and safe partial
+  output-size diagnostics without retaining source/output fragments in metadata.
+- Verification: 31 runtime and 9 installer/package tests; actual Gemini High
+  file-task verification is recorded in docs/VERIFICATION.md.
+
 ## 1.2.1 — 2026-10-14
 
 - Removed unnecessary reverse DNS from the loopback monitor bind and increased

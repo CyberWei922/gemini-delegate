@@ -20,6 +20,7 @@ def run():
     parser.add_argument('--context', default='')
     parser.add_argument('--input', help='JSON file containing delegate_task arguments')
     parser.add_argument('--timeout', type=int, default=180)
+    parser.add_argument('--attempt-timeout', type=int, help='Optional first-attempt cap; total timeout still bounds all attempts')
     args = parser.parse_args()
     manager = Manager()
     try:
@@ -39,6 +40,8 @@ def run():
                     'workspace':args.workspace,'timeout_seconds':args.timeout}
             if args.title:
                 task['title'] = args.title
+        if args.attempt_timeout is not None:
+            task['attempt_timeout_seconds'] = args.attempt_timeout
         submitted = call(manager, 'delegate_task', task)
         print(json.dumps(submitted,ensure_ascii=False),flush=True)
         while True:

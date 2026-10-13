@@ -3,7 +3,7 @@
 让 Codex 通过本机官方 Antigravity CLI（AGY），把独立的简单任务交给
 **Gemini 3.8 Flash High**。GPT 负责复杂规划、逻辑判断和最终复核。
 
-版本 **1.2.1** · MIT 开源 · 独立社区项目，由 CyberWei922 发起、AI 辅助开发。
+版本 **1.2.2** · MIT 开源 · 独立社区项目，由 CyberWei922 发起、AI 辅助开发。
 本项目不隶属于 Google 或 OpenAI。
 
 ## 把链接交给 Codex 安装
@@ -77,9 +77,14 @@ codex plugin marketplace add CyberWei922/gemini-delegate --ref main
 
 - 固定 High 模型；官方 AGY 登录；不读取 OAuth、不调用私有端点、不回退 API。
 - 单个 AGY 执行槽在聊天间共享；异步状态、取消、硬超时、至多一次有限重试。
+- 默认总执行预算为 180 秒，可设为 15–600 秒；涵盖工作器开始后的资料读取、
+  AGY 执行槽等待和所有尝试。单次调用默认使用剩余预算，没有隐藏的 75 秒限制。
+  `attempt_timeout_seconds` 可单独限制首次尝试；超时重试必须有更长的可用预算。
 - 拒绝空结果、权限拒绝、部分超时输出、无效 JSON 和不符合结果 schema 的输出。
 - 只读明确提供的文件；修改先暂存，GPT 复核后应用，原文件哈希和候选哈希必须
   一致，保留备份。结果格式通过不代表内容或代码已正确。
+- 文件、长上下文与网页文本按 UTF-8 原始换行拆成最多 24 KiB 的快照，配合小型
+  索引读取；不会把源码塞进一行 JSON。任务结束后删除索引与全部输入快照。
 - 网页读取仅支持公开 HTTP(S) 文本，不绕过登录或访问控制。
 - 可选联网搜索依赖你已有的 `mcporter` Exa 配置；安装不会自动安装或登录它。
 - 私有运行记录在 `~/.local/share/gemini-delegate/`，含任务标题、结果、来源、
@@ -91,6 +96,12 @@ codex plugin marketplace add CyberWei922/gemini-delegate --ref main
 ```sh
 python3 -m unittest discover -s plugins/gemini-delegate/tests -v
 python3 -m unittest discover -s tests -v
+```
+
+已登录的用户也可以执行真实文件读取检查（会使用自己的 Gemini 额度）：
+
+```sh
+python3 scripts/smoke.py --file-task --workspace . --timeout 300
 ```
 
 安装测试使用隔离的临时目录和模拟 Codex 注册接口，不改真实账号设置。

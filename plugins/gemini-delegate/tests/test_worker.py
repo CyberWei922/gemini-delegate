@@ -1,4 +1,5 @@
 import json
+import contextlib
 import os
 from pathlib import Path
 import signal
@@ -11,7 +12,9 @@ import unittest
 from unittest import mock
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'server'))
-from worker import Manager, WorkerError, decode_result, digest, run_process, validate_schema, public_url, MODEL
+from worker import (Manager, WorkerError, decode_result, digest, run_process,
+                    validate_schema, public_url, text_chunks, write_input_bundle,
+                    INPUT_CHUNK_BYTES, MODEL)
 from main import call
 
 
@@ -53,6 +56,15 @@ class ResultTests(unittest.TestCase):
 
 
 class ProcessTests(unittest.TestCase):
+    def test_timeout_keeps_safe_output_size_diagnostics(self):
+        code='import sys,time; print("partial",flush=True); print("diagnostic",file=sys.stderr,flush=True); time.sleep(30)'
+        with self.assertRaises(WorkerError) as caught:
+            run_process([sys.executable,'-c',code],Path.home(),.4)
+        self.assertEqual(caught.exception.code,'timeout')
+        self.assertGreater(caught.exception.details['stdout_bytes'],0)
+        self.assertGreater(caught.exception.details['stderr_bytes'],0)
+        self.assertNotIn('partial',json.dumps(caught.exception.details))
+
     def test_hard_timeout_reaps_descendants(self):
         with tempfile.TemporaryDirectory() as d:
             marker=Path(d)/'pid'
@@ -133,6 +145,149 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(result['status'],'failed')
         self.assertEqual(len(result['attempts']),2)
         self.assertEqual(result['error']['code'],'empty_result')
+
+    def test_default_attempt_can_use_more_than_75_seconds(self):
+        self.manager.attempt_seconds=None
+        envelope=json.dumps({'status':'SUCCESS','response':'OK'})
+        with mock.patch('worker.run_process',return_value=(envelope,'',0)) as process:
+            jid=self.manager.submit({'instruction':'Return OK','timeout_seconds':180})['task_id']
+            result=self.manager.result(jid,10)
+        self.assertEqual(result['status'],'completed',result)
+        self.assertGreater(process.call_args.args[2],175)
+        self.assertLessEqual(process.call_args.args[2],180)
+        self.assertGreater(result['attempts'][0]['timeout_seconds'],175)
+
+    def test_execution_budget_is_calculated_after_slot_wait(self):
+        self.manager.attempt_seconds=None
+        original_slot=self.manager._agy_slot
+        @contextlib.contextmanager
+        def delayed_slot(job,deadline):
+            time.sleep(.2)
+            with original_slot(job,deadline):
+                yield
+        envelope=json.dumps({'status':'SUCCESS','response':'OK'})
+        with mock.patch.object(self.manager,'_agy_slot',delayed_slot), mock.patch('worker.run_process',return_value=(envelope,'',0)) as process:
+            jid=self.manager.submit({'instruction':'Return OK','timeout_seconds':15})['task_id']
+            result=self.manager.result(jid,10)
+        self.assertEqual(result['status'],'completed',result)
+        self.assertLess(process.call_args.args[2],14.9)
+        self.assertLess(result['attempts'][0]['timeout_seconds'],14.9)
+
+    def test_timeout_does_not_retry_the_same_default_budget(self):
+        self.manager.attempt_seconds=None
+        with mock.patch('worker.run_process',side_effect=WorkerError('timeout','deadline')) as process:
+            jid=self.manager.submit({'instruction':'Return OK','timeout_seconds':15})['task_id']
+            result=self.manager.result(jid,10)
+        self.assertEqual(result['status'],'failed')
+        self.assertEqual(result['error']['code'],'timeout')
+        self.assertEqual(process.call_count,1)
+        self.assertFalse(result['attempts'][0]['usage_reported'])
+
+    def test_explicit_timeout_retry_gets_a_larger_bounded_budget(self):
+        envelope=json.dumps({'status':'SUCCESS','response':'OK'})
+        with mock.patch('worker.run_process',side_effect=[WorkerError('timeout','deadline'),(envelope,'',0)]) as process:
+            jid=self.manager.submit({'instruction':'Return OK','timeout_seconds':45,'attempt_timeout_seconds':15})['task_id']
+            result=self.manager.result(jid,10)
+        self.assertEqual(result['status'],'completed',result)
+        limits=[entry.args[2] for entry in process.call_args_list]
+        self.assertAlmostEqual(limits[0],17,places=2)
+        self.assertAlmostEqual(limits[1],32,places=2)
+        self.assertEqual(len(result['attempts']),2)
+        self.assertLess(sum(item['elapsed_seconds'] for item in result['attempts']),45)
+
+    def test_retry_slot_wait_cannot_create_a_shorter_timeout_attempt(self):
+        clock=[0]
+        slots=[0]
+        original_slot=self.manager._agy_slot
+        @contextlib.contextmanager
+        def contended_slot(job,deadline):
+            slots[0]+=1
+            if slots[0]==2:
+                clock[0]=25
+            with original_slot(job,deadline):
+                yield
+        def timed_out(*args):
+            clock[0]=12
+            raise WorkerError('timeout','deadline')
+        with mock.patch('worker.time.monotonic',side_effect=lambda:clock[0]), mock.patch.object(self.manager,'_agy_slot',contended_slot), mock.patch('worker.run_process',side_effect=timed_out) as process:
+            jid=self.manager.submit({'instruction':'Return OK','timeout_seconds':30,'attempt_timeout_seconds':15})['task_id']
+            result=self.manager.result(jid,10)
+        self.assertEqual(result['status'],'failed')
+        self.assertEqual(result['error']['code'],'timeout')
+        self.assertEqual(process.call_count,1)
+        self.assertEqual(len(result['attempts']),1)
+        self.assertEqual(slots[0],2)
+
+    def test_timeout_does_not_retry_with_an_equal_or_shorter_budget(self):
+        with mock.patch('worker.run_process',side_effect=WorkerError('timeout','deadline')) as process:
+            jid=self.manager.submit({'instruction':'Return OK','timeout_seconds':15,'attempt_timeout_seconds':15})['task_id']
+            result=self.manager.result(jid,10)
+        self.assertEqual(result['status'],'failed')
+        self.assertEqual(process.call_count,1)
+
+    def test_json_retry_explains_the_validation_error(self):
+        bad=json.dumps({'status':'SUCCESS','response':'{"check":'})
+        good=json.dumps({'status':'SUCCESS','response':'{"check":"OK"}'})
+        with mock.patch('worker.run_process',side_effect=[(bad,'',0),(good,'',0)]) as process:
+            jid=call(self.manager,'delegate_task',{'instruction':'Return JSON','response_type':'json','timeout_seconds':15})['task_id']
+            result=self.manager.result(jid,10)
+        self.assertEqual(result['status'],'completed',result)
+        second=process.call_args_list[1].args[0]
+        prompt=second[second.index('-p')+1]
+        self.assertIn('invalid_result',prompt)
+        self.assertIn('Expected a complete JSON response',prompt)
+
+    def test_file_snapshots_are_lossless_bounded_and_cleaned_on_timeout(self):
+        original=('一段原始代码\n' * 2500 + '无换行😀' * 3500).encode('utf-8')
+        self.source.write_bytes(original)
+        self.manager.attempt_seconds=None
+        def inspect(argv,root,*args):
+            root=Path(root)
+            manifest=json.loads((root/'input.json').read_text())
+            self.assertGreater(len((root/'input.json').read_text().splitlines()),1)
+            self.assertNotIn('content',manifest['files'][0])
+            self.assertLessEqual((root/'input.json').stat().st_size,INPUT_CHUNK_BYTES)
+            parts=manifest['files'][0]['parts']
+            self.assertGreater(len(parts),1)
+            restored=b''
+            for item in parts:
+                path=root/item['file'];body=path.read_bytes()
+                self.assertEqual(item['byte_offset'],len(restored))
+                self.assertLessEqual(len(body),INPUT_CHUNK_BYTES)
+                self.assertEqual(body.decode('utf-8').encode('utf-8'),body)
+                self.assertEqual(path.stat().st_mode & 0o777,0o600)
+                self.assertEqual(item['sha256'],digest(body))
+                restored+=body
+            self.assertEqual(restored,original)
+            raise WorkerError('timeout','deadline')
+        with mock.patch('worker.run_process',side_effect=inspect):
+            jid=self.manager.submit({'instruction':'Read the file','workspace':str(self.workspace),'input_files':['sample.txt'],'timeout_seconds':15})['task_id']
+            result=self.manager.result(jid,10)
+        self.assertEqual(result['error']['code'],'timeout',result)
+        self.assertFalse((self.manager.state/'jobs'/jid/'inputs').exists())
+        self.assertFalse((self.manager.state/'jobs'/jid/'input.json').exists())
+        self.assertEqual(self.source.read_bytes(),original)
+
+    def test_empty_and_unicode_text_chunks_round_trip(self):
+        self.assertEqual(list(text_chunks('')),[])
+        original='头部\r\n'+'😀中文' * 300
+        chunks=list(text_chunks(original,97))
+        self.assertEqual(b''.join(body for offset,body in chunks).decode('utf-8'),original)
+        self.assertTrue(all(len(body)<=97 for offset,body in chunks))
+        self.assertTrue(all(body.decode('utf-8') for offset,body in chunks))
+
+    def test_manifest_parts_cover_context_web_and_search(self):
+        root=self.root/'bundle';root.mkdir()
+        bundle={'instruction':'Extract data','context':'上下文\n'*5000,
+                'files':[],'web_sources':[{'url':'https://example.com','text':'网页\n'*10000,'sha256':'hash'}],
+                'search_results':'Source A\nSource B'}
+        manifest=write_input_bundle(root,bundle)
+        def restore(parts):
+            return b''.join((root/p['file']).read_bytes() for p in parts).decode('utf-8')
+        self.assertEqual(restore(manifest['context_parts']),bundle['context'])
+        self.assertEqual(restore(manifest['search_result_parts']),bundle['search_results'])
+        self.assertEqual(restore(manifest['web_sources'][0]['parts']),bundle['web_sources'][0]['text'])
+        self.assertEqual(manifest['web_sources'][0]['url'],'https://example.com')
 
     def test_metadata_survives_server_restart_without_input_bundle(self):
         jid,result=self.task()

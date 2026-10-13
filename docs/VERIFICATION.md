@@ -1,4 +1,37 @@
-# Release verification: 1.2.1
+# Release verification: 1.2.2
+
+Date: 2026-10-14. Verified on macOS with Python 3.14 and official AGY 1.3.4.
+
+- 31 runtime tests and 9 installer/package tests passed locally. New regressions
+  cover lossless UTF-8/CRLF/long-line snapshots, private input cleanup, budgets
+  above 75 seconds, budget calculation after slot acquisition, bounded retries,
+  a shortened budget after retry-slot contention and safe timeout diagnostics.
+- A real new-package MCP server initialized as 1.2.2, exposed all seven tools and
+  invoked authenticated gemini-3.8-flash-high to extract facts from 61,453 bytes
+  of worker/test source. The result matched independently checked values in
+  47.29 seconds, one attempt, with 54,360 reported tokens.
+- The AGY execution transcript confirmed four view_file calls: a 1,697-byte
+  manifest and all three raw text parts (24,490 / 16,620 / 20,343 bytes). Every
+  view covered its full line range without byte truncation. All input parts and
+  the manifest were removed after completion; original source stayed unchanged.
+- The existing local plugin source was backed up, updated to 1.2.2 and reinstalled
+  through the official Codex plugin command. Runtime files and installed cache
+  were compared; the original MCP registration, membership account preference
+  and unrelated registrations were preserved. The installed runtime suite passed.
+- The newly installed compatibility client also completed an authenticated High
+  JSON check in 11.87 seconds, one attempt, with 3,502 reported tokens.
+- A running Codex chat can retain its old MCP process until that connection is
+  reloaded. No app-wide restart or interruption of unrelated chats was performed.
+  The updated compatibility client calls the same new AGY worker immediately;
+  this must not be mistaken for verification that the old native connection has
+  reloaded.
+
+CI still covers Ubuntu Python 3.9/3.12 and macOS Python 3.12; inspect the actual
+release commit's [Actions result](https://github.com/CyberWei922/gemini-delegate/actions).
+These fixes do not add Windows support or native external-subagent UI support.
+No authenticated Linux or third-party-account inference was tested.
+
+## Historical verification: 1.2.1
 
 Date: 2026-10-14. Verification used macOS, Python 3.14 and Codex CLI 0.162.1.
 
