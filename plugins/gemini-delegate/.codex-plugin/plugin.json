@@ -1,0 +1,27 @@
+{
+  "name": "gemini-delegate",
+  "version": "1.2.0",
+  "description": "Delegate bounded routine tasks to Gemini 3.8 Flash High using official local AGY membership authentication.",
+  "author": {
+    "name": "Wei"
+  },
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Gemini Delegate",
+    "shortDescription": "Gemini High 分工助手",
+    "longDescription": "通过本机官方 AGY 调用 Gemini 3.8 Flash High，承担简单任务；GPT 负责复杂规划、逻辑判断和最终复核。",
+    "developerName": "Wei",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": "把简单任务交给 Gemini High，复杂规划和逻辑判断由你负责。",
+    "logo": "./assets/icon.svg",
+    "composerIcon": "./assets/icon.svg"
+  },
+  "repository": "https://github.com/CyberWei922/gemini-delegate",
+  "license": "MIT"
+}

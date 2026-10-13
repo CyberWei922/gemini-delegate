@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+.venv/
+dist/
+*.zip
+.DS_Store
+.install-state.json
+VALIDATION*.json
+settings.json
+auth.json
+credentials.json
+config-backups/
+jobs/
+.env*

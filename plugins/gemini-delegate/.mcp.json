@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "gemini-delegate": {
+      "type": "stdio",
+      "command": "python3",
+      "args": [
+        "${PLUGIN_ROOT}/server/main.py"
+      ],
+      "cwd": "${PLUGIN_ROOT}"
+    }
+  }
+}
