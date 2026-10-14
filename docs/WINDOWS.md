@@ -52,7 +52,7 @@ py -3 scripts/smoke.py --workspace . --timeout 180
 ```
 
 安装会保存私有设置备份，只添加插件 jobs 目录读取授权，并默认关闭额外付费 credits。
-最后一条会消耗你自己的 Gemini 额度：应返回 `passed: true`、版本 `1.3.0`、模型
+最后一条会消耗你自己的 Gemini 额度：应返回 `passed: true`、版本 `1.3.1`、模型
 `gemini-3.8-flash-high`、真实任务 ID、尝试次数和 `GEMINI_OK`。不要把模型列表、排队、
 超时、权限拒绝或空输出算作推理成功。
 
@@ -66,6 +66,9 @@ py -3 scripts/smoke.py --workspace . --timeout 180
 
 若官方 AGY 实际使用不同设置位置，使用 `--agy-settings` 指定；程序不探测或提取令牌。
 `--agy`、`--codex` 可传完整路径，例如 `--agy "C:\实际安装目录\agy.exe"`。
+doctor 支持相同的 CLI 路径参数，并检查版本、必需调用参数及模型查询错误。
+备用客户端和 `smoke.py --plugin-root` 自动读取所选安装包的运行环境；也可用
+`--agy`、`--state-dir` 显式覆盖，当前进程环境优先于安装配置。
 自定义状态目录通过 `--state-dir` 指定；选择只有当前用户可访问的位置，Windows 使用
 目录继承的 ACL，`chmod` 不等同于 NTFS 权限设置。
 

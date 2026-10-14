@@ -12,7 +12,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from host_tools import FileLock, atomic_replace, detached_flags, process_alive
+from host_tools import FileLock, atomic_replace, detached_flags, process_alive, read_text
 
 TERMINAL = {'completed', 'failed', 'cancelled', 'interrupted'}
 CHILDREN = []
@@ -63,7 +63,7 @@ def read_tasks(state, workspace=None, limit=200):
             if path.is_symlink():
                 continue
             try:
-                task = public_task(json.loads(path.read_text(encoding='utf-8')))
+                task = public_task(json.loads(read_text(path)))
             except (OSError, ValueError, TypeError):
                 continue
             if not workspace or task.get('workspace') == workspace:

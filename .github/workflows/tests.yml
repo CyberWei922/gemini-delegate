@@ -33,5 +33,7 @@ jobs:
         run: >-
           python -c "import sys,unittest; sys.path.insert(0,'plugins/gemini-delegate/tests');
           from test_worker import WorkflowTests;
-          result=unittest.TextTestRunner().run(unittest.TestSuite(WorkflowTests('test_live_task_records_are_project_scoped_and_keep_preview') for _ in range(20)));
+          result=unittest.TextTestRunner().run(unittest.TestSuite(
+          [WorkflowTests('test_live_task_records_are_project_scoped_and_keep_preview') for _ in range(60)] +
+          [WorkflowTests('test_live_task_visible_to_another_manager_during_updates') for _ in range(20)]));
           sys.exit(not result.wasSuccessful())"

@@ -3,7 +3,7 @@
 <p align="center">让 Gemini High 处理简单任务，让 GPT 专注规划、判断和复核。</p>
 
 <p align="center">
-  <a href="https://github.com/CyberWei922/gemini-delegate/releases"><img src="https://img.shields.io/badge/Version-1.3.0-007EC6?style=flat-square" alt="版本 1.3.0"></a>
+  <a href="https://github.com/CyberWei922/gemini-delegate/releases"><img src="https://img.shields.io/badge/Version-1.3.1-007EC6?style=flat-square" alt="版本 1.3.1"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-007EC6?style=flat-square" alt="MIT 开源协议"></a>
   <a href="AGENTS.md"><img src="https://img.shields.io/badge/Python-3.9%2B-3776AB?style=flat-square" alt="Python 3.9 及以上"></a>
   <a href="docs/VERIFICATION.md"><img src="https://img.shields.io/badge/macOS-verified-111827?style=flat-square" alt="macOS 已实际调用验证"></a>

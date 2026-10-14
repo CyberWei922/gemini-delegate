@@ -17,6 +17,19 @@ from worker import WorkerError, run_process
 
 
 class HostTests(unittest.TestCase):
+    def test_posix_read_denial_is_not_retried(self):
+        with mock.patch.object(host_tools,'WINDOWS',False),mock.patch.object(Path,'read_text',side_effect=PermissionError(13,'Denied')) as read,mock.patch.object(host_tools.time,'sleep') as sleep:
+            with self.assertRaises(PermissionError):host_tools.read_text('progress.json')
+        self.assertEqual(read.call_count,1)
+        sleep.assert_not_called()
+
+    def test_windows_read_retry_has_a_deadline(self):
+        started=time.monotonic()
+        with mock.patch.object(host_tools,'WINDOWS',True),mock.patch.object(Path,'read_text',side_effect=PermissionError(13,'Denied')) as read:
+            with self.assertRaises(PermissionError):host_tools.read_text('progress.json',timeout=.03)
+        self.assertGreater(read.call_count,1)
+        self.assertLess(time.monotonic()-started,.5)
+
     @unittest.skipUnless(WINDOWS,'Real Windows file sharing required')
     def test_atomic_replace_waits_for_a_reader_to_release_the_file(self):
         with tempfile.TemporaryDirectory() as directory:

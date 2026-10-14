@@ -1,6 +1,6 @@
 {
   "name": "gemini-delegate",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "description": "Delegate bounded routine tasks to Gemini 3.8 Flash High using official local AGY membership authentication.",
   "author": {
     "name": "Wei"

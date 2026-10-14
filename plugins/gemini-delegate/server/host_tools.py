@@ -21,6 +21,19 @@ def configure_stdio():
             stream.reconfigure(encoding='utf-8')
 
 
+def read_text(path, encoding='utf-8', timeout=.1):
+    """Retry transient Windows sharing denials; keep POSIX reads unchanged."""
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            return Path(path).read_text(encoding=encoding)
+        except PermissionError as error:
+            if (not WINDOWS or time.monotonic() >= deadline or
+                    (getattr(error, 'winerror', None) not in (None, 5, 32, 33))):
+                raise
+            time.sleep(.01)
+
+
 def atomic_replace(source, target, timeout=1):
     """A Windows reader briefly denies replacement; keep the old file intact."""
     deadline = time.monotonic()+timeout

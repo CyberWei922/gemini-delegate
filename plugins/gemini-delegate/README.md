@@ -30,6 +30,10 @@ Cancellation/process cleanup may take a short additional grace period.
 Optional environment overrides: `GEMINI_DELEGATE_AGY` and
 `GEMINI_DELEGATE_STATE_DIR`. The installer records the detected values in its
 local MCP registration. Runtime defaults use the current user's home and PATH.
+The compatibility client and repository smoke client read the selected plugin's
+installed runtime paths. Precedence is explicit `--agy`/`--state-dir` options,
+process environment, installed manifest, then platform defaults. Only this
+plugin's two runtime path variables are loaded; account settings are not read.
 Windows state defaults to `%LOCALAPPDATA%\GeminiDelegate`. Native `.exe` and npm
 Node `.cmd` entrypoints are supported without passing task arguments through a
 shell. Unknown batch wrappers fail with an actionable error. UTF-8 is explicit

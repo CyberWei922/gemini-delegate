@@ -13,6 +13,7 @@ import tempfile
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO/'plugins/gemini-delegate/server'))
 from host_tools import atomic_replace, command_argv, configure_stdio, default_state_dir, find_program, run_command
+from agy_check import probe_agy
 MARKETPLACE = 'gemini-delegate-community'
 SELECTOR = 'gemini-delegate@' + MARKETPLACE
 SERVER = 'gemini_delegate'
@@ -178,6 +179,10 @@ def main():
     if not args.prepare_only:
         cli = resolve_program(args.codex, 'codex')
         agy = resolve_program(args.agy, 'agy')
+        prerequisite = probe_agy(agy, check_models=False)
+        if not prerequisite['agy_capabilities_supported']:
+            raise InstallError('AGY prerequisite check failed (' +
+                               prerequisite['diagnostic_code'] + '): ' + prerequisite['action'])
         if args.codex_home.resolve() != default_codex_home().resolve():
             raise InstallError('--codex-home differs from the Codex CLI home. Use --prepare-only for isolated staging.')
         existing = command(cli, ['mcp', 'get', SERVER, '--json'], allow_missing=True)

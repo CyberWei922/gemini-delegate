@@ -414,9 +414,26 @@ class Manager:
         self._persist_progress(job)
 
     def task_list(self, workspace=None, limit=200):
-        from dashboard import read_tasks
+        from dashboard import public_task, read_tasks
         path = str(Path(workspace).expanduser().resolve()) if workspace else None
-        tasks = read_tasks(self.state, path, limit)
+        records = {task['id']: task for task in read_tasks(self.state, path, limit)
+                   if isinstance(task.get('id'), str)}
+        # A local task must remain visible even if its on-disk snapshot is
+        # temporarily unreadable. Other processes use bounded sharing retries.
+        with self.lock:
+            ids = list(self.jobs)
+        for jid in ids:
+            current = self.result(jid)
+            if path and current.get('workspace') != path:
+                continue
+            current['owner_pid'] = os.getpid()
+            snapshot = public_task(current)
+            previous = records.get(jid, {})
+            if 'updated_at' in previous:
+                snapshot['updated_at'] = previous['updated_at']
+            records[jid] = snapshot
+        tasks = sorted(records.values(), key=lambda task: task.get('created_at', 0),
+                       reverse=True)[:limit]
         return {'tasks': tasks, 'active_tasks': sum(t['status'] not in
                 ('completed','failed','cancelled','interrupted') for t in tasks)}
 

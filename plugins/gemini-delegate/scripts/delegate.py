@@ -9,6 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'server'))
 from main import call
 from worker import Manager
 from host_tools import configure_stdio
+from runtime_config import manager_options
 
 
 def run():
@@ -23,8 +24,11 @@ def run():
     parser.add_argument('--input', help='JSON file containing delegate_task arguments')
     parser.add_argument('--timeout', type=int, default=180)
     parser.add_argument('--attempt-timeout', type=int, help='Optional first-attempt cap; total timeout still bounds all attempts')
+    parser.add_argument('--agy', help='Override the installed official AGY path')
+    parser.add_argument('--state-dir', type=Path, help='Override the installed task directory')
     args = parser.parse_args()
-    manager = Manager()
+    manager = Manager(**manager_options(Path(__file__).resolve().parents[1],
+                                       args.agy, args.state_dir))
     try:
         if args.monitor:
             print(json.dumps(call(manager, 'task_monitor', {'workspace':args.workspace}),ensure_ascii=False),flush=True)

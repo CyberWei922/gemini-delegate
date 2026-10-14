@@ -60,7 +60,9 @@ python3 scripts/doctor.py
 python3 scripts/install.py --dry-run
 ```
 
-`doctor.py` 会检查 Python、平台、Codex、AGY 和指定模型的可用性。
+`doctor.py` 会检查 Python、平台、Codex、AGY 版本与必需调用参数，以及指定模型的可用性。
+它区分旧版 CLI、登录、网络错误、模型缺失和查询超时，并报告安全的退出码及检查阶段。
+CLI 不在 PATH 中时，doctor 也支持 `--codex`、`--agy`；安装参数使用同样的路径。
 `--dry-run` 只展示安装计划，不安装；模型列表可用也不等于实际推理成功。
 
 需要登录时，让使用者打开官方 `agy`，本人完成 Google 登录。不要读取、复制、
@@ -91,7 +93,7 @@ codex plugin list --json
 python3 scripts/install.py
 ```
 
-脚本会检测 Python 和 AGY 的真实路径，准备本机 marketplace，通过官方 Codex
+脚本会先检查 AGY 所需能力，再检测 Python 和 AGY 的真实路径，准备本机 marketplace，通过官方 Codex
 命令安装 Skill 并注册 `gemini_delegate` MCP。它会私下备份 AGY 设置，只添加
 本插件 `jobs` 目录的读取权限，并默认关闭额外付费 AI credits；其他字段保留。
 每个步骤保存在私有安装回执中，失败时据此恢复，不删除原配置重新来过。
@@ -165,6 +167,8 @@ python3 scripts/smoke.py --file-task --workspace . --timeout 300
 `plugin/scripts/delegate.py --input /path/to/temporary-task.json`。
 参数 JSON 与 `delegate_task` 一致；客户端立即打印任务 ID，随后等待校验结果。
 完成后删除临时任务参数文件，不把客户端成功误报为原生工具已加载。
+兼容客户端与 `smoke.py --plugin-root` 自动读取所选安装包的运行环境。
+显式 `--agy`、`--state-dir` 参数优先，其次为当前进程环境、安装配置和平台默认值。
 
 认证、权限、网络或额度检查失败时，报告实际错误和仍未验证的部分，不宣称安装已全部完成。
 
