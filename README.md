@@ -1,128 +1,66 @@
-# Gemini Delegate
+<h1 align="center">Gemini Delegate</h1>
 
-让 Codex 通过本机官方 Antigravity CLI（AGY），把独立的简单任务交给
-**Gemini 3.8 Flash High**。GPT 负责复杂规划、逻辑判断和最终复核。
+<p align="center">让 Gemini High 处理简单任务，让 GPT 专注规划、判断和复核。</p>
 
-版本 **1.2.2** · MIT 开源 · 独立社区项目，由 CyberWei922 发起、AI 辅助开发。
-本项目不隶属于 Google 或 OpenAI。
+<p align="center">
+  <a href="https://github.com/CyberWei922/gemini-delegate/releases"><img src="https://img.shields.io/badge/Version-1.2.2-007EC6?style=flat-square" alt="版本 1.2.2"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-007EC6?style=flat-square" alt="MIT 开源协议"></a>
+  <a href="AGENTS.md"><img src="https://img.shields.io/badge/Python-3.9%2B-3776AB?style=flat-square" alt="Python 3.9 及以上"></a>
+  <a href="docs/VERIFICATION.md"><img src="https://img.shields.io/badge/macOS-verified-111827?style=flat-square" alt="macOS 已实际调用验证"></a>
+  <a href="https://github.com/CyberWei922/gemini-delegate/actions"><img src="https://img.shields.io/badge/Linux-CI%20passed-4c1?style=flat-square" alt="Linux 自动测试通过"></a>
+</p>
+
+<p align="center">
+  <a href="AGENTS.md">安装指南</a> ·
+  <a href="CHANGELOG.md">更新记录</a> ·
+  <a href="docs/VERIFICATION.md">验证记录</a>
+</p>
+
+通过本机官方 Antigravity CLI（AGY），使用你自己的 Google 账号和模型额度。
+独立社区项目，由 CyberWei922 发起、AI 辅助开发，不隶属于 Google 或 OpenAI。
 
 ## 把链接交给 Codex 安装
 
-复制下面这句话给 Codex：
+复制这一句：
 
-> 帮我安装 https://github.com/CyberWei922/gemini-delegate 。先阅读仓库 AGENTS.md，按步骤检查依赖、安装插件，并实际调用 Gemini High 验证。使用我自己的 AGY 登录，不要改其他项目或改用付费 API。
+> 帮我安装 [https://github.com/CyberWei922/gemini-delegate](https://github.com/CyberWei922/gemini-delegate) 。
 
-[AGENTS.md](AGENTS.md) 包含逐步安装指导。Codex 能完成可自动化的步骤；首次
-Google 登录需要你本人完成。安装成功和模型有权限，必须分别检查，最后还要
-实际推理通过才算可用。
+完整步骤都在根目录 [AGENTS.md](AGENTS.md)：检查依赖、安装、登录、验证、更新和卸载。
+建议发送仓库链接；需要查看具体步骤时，再打开安装指南。首次 Google 登录由你本人完成。
 
 ## 前提与手动安装
 
-- macOS 或 Linux、Python 3.9+、Git、Codex CLI。
-- 官方 `agy` 已安装并登录，`agy models` 包含 `gemini-3.8-flash-high`。
-- 你自己的 Google 账号及模型额度。不会共享作者的会员或凭据。
-- macOS 已实际调用验证；Linux 有自动测试，尚未做真实 AGY 调用验证。
-  Windows 目前不支持。
+- macOS 或 Linux、Python 3.9+、Git、Codex CLI，以及已登录的官方 AGY。
+- `agy models` 中需要有 `gemini-3.8-flash-high`。
+- macOS 已实际调用验证；Linux 已通过 CI；Windows 暂不支持。
 
-```sh
-git clone https://github.com/CyberWei922/gemini-delegate.git
-cd gemini-delegate
-python3 scripts/doctor.py
-python3 scripts/install.py --dry-run
-python3 scripts/install.py
-```
-
-然后在新的 Codex 会话里说：“使用 Gemini Delegate 做一次连接检查。”
-当前会话没加载工具时，可用安装目录里的 `plugin/scripts/delegate.py` 验证同一
-工作器。不要因此把 MCP 加载状态误报为成功。
-
-安装脚本检测 Python/AGY 路径，不写死用户名或 Homebrew 位置。通过官方
-`codex plugin marketplace add`、`codex plugin add` 和 `codex mcp add` 注册。
-它会备份 AGY 设置，仅增加本插件 jobs 目录的读取权限，并默认关闭额外付费
-AI credits；其他字段保留。`--keep-credit-setting` 可保留原偏好。
-遇到已有不同 MCP 注册会停止，明确授权替换后才使用 `--replace-existing`。
-安装不会改你的全局 AGENTS.md 或项目代码。
-
-也可以先添加 GitHub marketplace 来浏览插件：
-
-```sh
-codex plugin marketplace add CyberWei922/gemini-delegate --ref main
-```
-
-仅添加 marketplace 不等于完成 Python/AGY 权限和 MCP 环境配置。
-首次完整安装请按 AGENTS.md 或安装脚本执行。
+手动命令和缺少依赖时的处理，见 [安装指南](AGENTS.md#1-准备源码与环境)。
 
 ## 日常分工与可见性
 
-调用前会说明：
-
-> 我会同时使用 Gemini Delegate 插件，让 Gemini High 整理资料；我继续制定方案。
-
-插件异步返回任务 ID，Codex 在结果到来前处理独立工作。最终交付说明 Gemini
-做了什么，并由 GPT 复核。需要依赖 Gemini 结果的步骤会等待；不会重复在 GPT
-里做同一份处理。能否提速取决于分工和 AGY 启动、排队、复核成本。
-
-| 适合 Gemini | GPT 保留 |
+| Gemini High | GPT |
 | --- | --- |
-| 公开资料提取、文件清单、翻译改写、数据整理、明确的机械修改候选 | 规划、架构、逻辑判断、问题根因、风险判断、最终审查与应用修改 |
+| 资料提取、文件清单、翻译改写、数据整理、明确的机械修改 | 规划、架构、逻辑判断、根因分析、最终复核 |
 
-它是 MCP + Skill 插件，不会把 Gemini 注册成 Codex 原生子智能体，也不会
-自动创建 GPT 桥梁或打开网页。调用记录、模型、状态和结果可通过 `list_tasks`
-按项目查询；网页看板仅在明确请求时打开。
+调用前会说明使用 Gemini Delegate，随后并行处理独立工作，交付时报告实际结果。
+你可以说：“把这个任务里简单的部分交给 Gemini High，你负责规划和复核。”
 
-工具：`gemini_status`、`delegate_task`、`get_task_result`、`cancel_task`、
-`apply_task_changes`、`list_tasks`、`task_monitor`。
+通过 `list_tasks` 查看真实任务记录。插件目前无法把 Gemini 显示为 Codex 原生子智能体；
+网页看板只在你明确要求时打开。并行分工能否提速，取决于任务和调用开销。
 
 ## 执行与数据
 
-- 固定 High 模型；官方 AGY 登录；不读取 OAuth、不调用私有端点、不回退 API。
-- 单个 AGY 执行槽在聊天间共享；异步状态、取消、硬超时、至多一次有限重试。
-- 默认总执行预算为 180 秒，可设为 15–600 秒；涵盖工作器开始后的资料读取、
-  AGY 执行槽等待和所有尝试。单次调用默认使用剩余预算，没有隐藏的 75 秒限制。
-  `attempt_timeout_seconds` 可单独限制首次尝试；超时重试必须有更长的可用预算。
-- 拒绝空结果、权限拒绝、部分超时输出、无效 JSON 和不符合结果 schema 的输出。
-- 只读明确提供的文件；修改先暂存，GPT 复核后应用，原文件哈希和候选哈希必须
-  一致，保留备份。结果格式通过不代表内容或代码已正确。
-- 文件、长上下文与网页文本按 UTF-8 原始换行拆成最多 24 KiB 的快照，配合小型
-  索引读取；不会把源码塞进一行 JSON。任务结束后删除索引与全部输入快照。
-- 网页读取仅支持公开 HTTP(S) 文本，不绕过登录或访问控制。
-- 可选联网搜索依赖你已有的 `mcporter` Exa 配置；安装不会自动安装或登录它。
-- 私有运行记录在 `~/.local/share/gemini-delegate/`，含任务标题、结果、来源、
-  修改候选和备份；任务输入包执行后删除。Google/AGY 的保存策略独立适用。
-  [数据说明](docs/PRIVACY.md) · [报告问题](SECURITY.md)
+- 固定 Gemini High，通过官方 AGY 调用会员额度，不切换到付费 API。
+- 文件分块读取，支持取消、硬超时和有限重试；修改须经复核后应用。
+- 输入快照在任务结束后删除；结果和备份保存在本机。
+- 公开网页读取可用；搜索需另有 Exa/mcporter 配置。
+
+更多细节见 [运行说明](plugins/gemini-delegate/README.md) 和 [数据说明](docs/PRIVACY.md)。
 
 ## 验证、更新与卸载
 
-```sh
-python3 -m unittest discover -s plugins/gemini-delegate/tests -v
-python3 -m unittest discover -s tests -v
-```
+命令与验收标准见 [安装指南](AGENTS.md#5-实际调用-gemini-high-验收)，测试范围见
+[验证记录](docs/VERIFICATION.md)。问题反馈与贡献方式见 [指南末尾](AGENTS.md#8-测试与贡献)
+及 [SECURITY.md](SECURITY.md)。
 
-已登录的用户也可以执行真实文件读取检查（会使用自己的 Gemini 额度）：
-
-```sh
-python3 scripts/smoke.py --file-task --workspace . --timeout 300
-```
-
-安装测试使用隔离的临时目录和模拟 Codex 注册接口，不改真实账号设置。
-真实 AGY 验证范围见 [验证记录](docs/VERIFICATION.md)。测试支持不等于所有平台
-都已做真实账号验收。
-
-更新仓库后重跑安装脚本和实际连接检查。卸载：
-
-```sh
-python3 scripts/uninstall.py --dry-run
-python3 scripts/uninstall.py
-```
-
-仅删除本安装拥有的注册和新增读取权限；任务结果及备份保留，也不会重新开启
-额外付费 credits。可选看板进程关闭方法见 [运行说明](plugins/gemini-delegate/README.md)。
-
-贡献请先读 AGENTS.md、运行测试并更新版本及 CHANGELOG。
-
-可复制的日常指令：
-
-- 用 Gemini Delegate 整理这些公开资料，你负责复核来源和结论。
-- 这个任务由你规划，把能独立执行的简单部分交给 Gemini High 并行处理。
-- 检查当前项目是否调用了 Gemini，给出真实任务记录和状态。
-- 这次只用 GPT，不调用 Gemini。
+项目采用 [MIT 开源协议](LICENSE)。

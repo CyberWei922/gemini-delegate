@@ -1,5 +1,12 @@
 # Changelog
 
+## 未发布（文档）— 2026-10-14
+
+- 简化 README 并保留主要章节，安装指令只需仓库链接。
+- 居中展示标题与版本、MIT、Python、平台徽章。
+- 将完整安装、验证、更新和卸载流程集中到中文 AGENTS.md。
+- 仅调整文档，运行时版本保持 1.2.2；检查 GitHub 渲染、链接和徽章。
+
 ## 1.2.2 — 2026-10-14
 
 - Replaced escaped one-line input bundles with a bounded manifest and lossless
