@@ -10,6 +10,7 @@
 - 对 Windows 短暂文件共享冲突增加有上限的原子替换重试，保留旧任务记录直至替换成功。
 - 原生和 npm Node CLI 入口通过参数数组调用，未知批处理拒绝执行；中文路径、UTF-8 协议和 BOM JSON 兼容。
 - 跨平台流式输出有硬上限；超时保留安全字节统计，清理可重复调用；系统异常保留 errno/winerror 便于排查。
+- 修正 Windows 粗粒度计时下的浮点预算边界，并额外重复 20 轮任务记录并发回归。
 - Windows Python 3.9/3.12 CI 和 PowerShell 手动验收指南；真实 Windows AGY 登录与会员推理仍待手测。
 - 验证范围：44 个运行时测试（macOS 跳过 4 个 Windows 专项）、11 个安装与协议测试；CI 和实际调用见 docs/VERIFICATION.md。
 

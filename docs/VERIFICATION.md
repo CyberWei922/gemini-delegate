@@ -6,14 +6,29 @@ verification using [WINDOWS.md](WINDOWS.md).
 
 - Local macOS: 44 runtime tests (4 Windows-only skips) and 11 installer/protocol tests
   passed. Added cross-process file locking, non-destructive PID probing,
-  argument preservation, legacy-console UTF-8 MCP round trips, parent-exit descendant cleanup, bounded streaming
-  output, Windows Job assignment gating/failure and UTF-8 BOM settings coverage.
+  argument preservation, legacy-console UTF-8 MCP round trips, parent-exit
+  descendant cleanup, bounded streaming output, Windows Job assignment
+  gating/failure, real file-sharing conflicts and UTF-8 BOM settings coverage.
 - CI includes Ubuntu Python 3.9/3.12, macOS Python 3.12 and Windows Python
-  3.9/3.12. CI uses simulated CLI services and no login; final run results are recorded
-  below once verified.
+  3.9/3.12. All five jobs passed in [run 38512823254](https://github.com/CyberWei922/gemini-delegate/actions/runs/38512823254)
+  at runtime commit f464bbe672ed9672ba1fcb2b07b364214b5ec0e4. Both Windows jobs
+  ran every runtime test (no Windows-specific skips), 11 installer/protocol
+  tests and 20 additional live-record concurrency regressions. CI uses
+  simulated CLI services and no login.
+  Earlier CI exposed a transient Windows file-sharing failure and a
+  coarse-clock floating point budget edge; bounded atomic replacement retries
+  and strict budget clamping were added before the final successful run.
 - A real 1.3.0 MCP server exposed all seven tools and invoked official AGY
   gemini-3.8-flash-high on macOS. Task d09e2a2c7f364fd3 returned GEMINI_OK
   in 11.73 seconds, one validated attempt, no retry, 3,398 reported tokens.
+- Final-runtime file extraction task c104013b2ff74ab0 read snapshots of 64,352
+  source bytes in 3 parts and matched independently extracted source values.
+  It finished in 147.96 seconds: first result failed validation (invalid_result),
+  one retry succeeded; 121,649 total tokens were reported across both attempts.
+  Input manifest and all parts were deleted; original files remained unchanged.
+- Gemini task 098a935525e04bd8 inventoried the existing test platform assumptions
+  in 157.36 seconds, one attempt, no retry. Planning, implementation and tests
+  remained with the primary agent.
 - Windows previews support native executable and standard npm Node batch
   entrypoints. Other batch wrappers fail without executing a shell. State lives
   under the current user's LOCALAPPDATA; NTFS access uses inherited ACLs.
