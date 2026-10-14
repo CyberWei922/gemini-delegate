@@ -4,7 +4,7 @@ Date: 2026-10-14. Windows-specific behavior is tested in the CI matrix with
 Python 3.9/3.12; authenticated Windows AGY inference remains pending manual
 verification using [WINDOWS.md](WINDOWS.md).
 
-- Local macOS: 42 runtime tests (3 Windows-only skips) and 11 installer/protocol tests
+- Local macOS: 43 runtime tests (3 Windows-only skips) and 11 installer/protocol tests
   passed. Added cross-process file locking, non-destructive PID probing,
   argument preservation, legacy-console UTF-8 MCP round trips, parent-exit descendant cleanup, bounded streaming
   output, Windows Job assignment gating/failure and UTF-8 BOM settings coverage.

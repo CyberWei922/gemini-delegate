@@ -640,6 +640,11 @@ class Manager:
         except WorkerError as e:
             job['status'] = 'cancelled' if e.code=='cancelled' else 'failed'
             job['error'] = {'code':e.code,'message':str(e),'details':e.details}
+        except OSError as e:
+            job['status'] = 'failed'
+            job['error'] = {'code':'os_error',
+                            'message':'OS rejected a worker operation; check CLI paths, process policy and file access',
+                            'details':{'errno':e.errno,'winerror':getattr(e,'winerror',None)}}
         except Exception as e:
             job['status'] = 'failed'
             job['error'] = {'code':'internal_error','message':f'Worker failed: {type(e).__name__}'}

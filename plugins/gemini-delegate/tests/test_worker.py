@@ -101,6 +101,17 @@ class ProcessTests(unittest.TestCase):
 
 
 class WorkflowTests(unittest.TestCase):
+    def test_os_error_preserves_codes_without_private_command_data(self):
+        error=OSError(13,'PRIVATE_COMMAND_DATA')
+        error.winerror=5
+        with mock.patch('worker.run_process',side_effect=error):
+            jid=self.manager.submit({'instruction':'return OK','workspace':str(self.workspace)})['task_id']
+            result=self.manager.result(jid,10)
+        self.assertEqual(result['status'],'failed')
+        self.assertEqual(result['error']['code'],'os_error')
+        self.assertEqual(result['error']['details'],{'errno':13,'winerror':5})
+        self.assertNotIn('PRIVATE_COMMAND_DATA',json.dumps(result))
+
     def setUp(self):
         self.monitor = mock.patch.object(Manager,'task_monitor',return_value={'dashboard_url':'http://127.0.0.1/example'})
         self.monitor.start()
