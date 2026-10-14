@@ -520,7 +520,8 @@ class Manager:
         root, args = Path(job['root']), job['args']
         started = time.monotonic()
         job['started_at'] = time.time()
-        deadline = started+args.get('timeout_seconds', 180)
+        execution_budget = args.get('timeout_seconds', 180)
+        deadline = started+execution_budget
         try:
             if job['cancel'].is_set():
                 raise WorkerError('cancelled', 'Task cancelled while queued')
@@ -571,7 +572,9 @@ class Manager:
                 attempt_info = None
                 try:
                     with self._agy_slot(job,deadline):
-                        remaining = deadline-time.monotonic()
+                        # Floating point subtraction can exceed the original
+                        # budget by an ulp on a coarse Windows clock.
+                        remaining = min(execution_budget, deadline-time.monotonic())
                         if remaining < MIN_ATTEMPT_SECONDS:
                             raise WorkerError('timeout', 'Task deadline reached before AGY execution')
                         limit = min(cap * (attempt+1), remaining) if cap is not None else remaining

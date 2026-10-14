@@ -172,7 +172,8 @@ class WorkflowTests(unittest.TestCase):
     def test_default_attempt_can_use_more_than_75_seconds(self):
         self.manager.attempt_seconds=None
         envelope=json.dumps({'status':'SUCCESS','response':'OK'})
-        with mock.patch('worker.run_process',return_value=(envelope,'',0)) as process:
+        # With no elapsed clock tick, (76.013+180)-76.013 rounds above 180.
+        with mock.patch('worker.time.monotonic',return_value=76.013), mock.patch('worker.run_process',return_value=(envelope,'',0)) as process:
             jid=self.manager.submit({'instruction':'Return OK','timeout_seconds':180})['task_id']
             result=self.manager.result(jid,10)
         self.assertEqual(result['status'],'completed',result)
