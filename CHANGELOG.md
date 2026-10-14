@@ -10,7 +10,7 @@
 - 原生和 npm Node CLI 入口通过参数数组调用，未知批处理拒绝执行；中文路径、UTF-8 协议和 BOM JSON 兼容。
 - 跨平台流式输出有硬上限；超时保留安全字节统计，清理可重复调用。
 - Windows Python 3.9/3.12 CI 和 PowerShell 手动验收指南；真实 Windows AGY 登录与会员推理仍待手测。
-- 验证范围：42 个运行时测试（macOS 跳过 3 个 Windows 专项）、10 个安装测试；CI 和实际调用见 docs/VERIFICATION.md。
+- 验证范围：42 个运行时测试（macOS 跳过 3 个 Windows 专项）、11 个安装与协议测试；CI 和实际调用见 docs/VERIFICATION.md。
 
 ## 1.2.2 — 2026-10-14
 

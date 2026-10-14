@@ -2,7 +2,9 @@ import contextlib
 import importlib.util
 import io
 import json
+import os
 from pathlib import Path
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -149,6 +151,23 @@ p.write_text(json.dumps(d));print('{}')
 
 
 class PackageTests(unittest.TestCase):
+    def test_mcp_protocol_uses_utf8_despite_legacy_console_encoding(self):
+        with tempfile.TemporaryDirectory(prefix='Gemini 协议 ') as directory:
+            root=Path(directory)
+            fake=root/'fake-agy.py'
+            fake.write_text('import json;print(json.dumps({"status":"SUCCESS","response":"OK"}))',encoding='utf-8')
+            request={'jsonrpc':'2.0','id':1,'method':'tools/call','params':{'name':'delegate_task','arguments':{
+                'title':'中文协议检查','instruction':'只返回 OK','workspace':str(root)}}}
+            env={**os.environ,'PYTHONIOENCODING':'cp1252','PYTHONUTF8':'0',
+                 'GEMINI_DELEGATE_AGY':str(fake),'GEMINI_DELEGATE_STATE_DIR':str(root/'state')}
+            result=subprocess.run([sys.executable,str(ROOT/'plugins/gemini-delegate/server/main.py')],
+                input=(json.dumps(request,ensure_ascii=False)+'\n').encode('utf-8'),
+                stdout=subprocess.PIPE,stderr=subprocess.PIPE,env=env,timeout=15)
+            self.assertEqual(result.returncode,0,result.stderr.decode('utf-8','replace'))
+            submitted=json.loads(result.stdout.decode('utf-8'))['result']['structuredContent']
+            self.assertEqual(submitted['title'],'中文协议检查')
+            self.assertEqual(submitted['workspace'],str(root.resolve()))
+
     def test_portable_manifests_and_version_match(self):
         root=ROOT/'plugins/gemini-delegate'
         manifest=json.loads((root/'plugin.json').read_text(encoding='utf-8'))

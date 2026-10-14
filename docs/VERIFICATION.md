@@ -4,13 +4,16 @@ Date: 2026-10-14. Windows-specific behavior is tested in the CI matrix with
 Python 3.9/3.12; authenticated Windows AGY inference remains pending manual
 verification using [WINDOWS.md](WINDOWS.md).
 
-- Local macOS: 42 runtime tests (3 Windows-only skips) and 10 installer tests
+- Local macOS: 42 runtime tests (3 Windows-only skips) and 11 installer/protocol tests
   passed. Added cross-process file locking, non-destructive PID probing,
-  argument preservation, parent-exit descendant cleanup, bounded streaming
+  argument preservation, legacy-console UTF-8 MCP round trips, parent-exit descendant cleanup, bounded streaming
   output, Windows Job assignment gating/failure and UTF-8 BOM settings coverage.
 - CI includes Ubuntu Python 3.9/3.12, macOS Python 3.12 and Windows Python
-  3.9/3.12. Actual run results and the new-package macOS AGY smoke check will be
-  recorded here after completion; CI uses simulated CLI services and no login.
+  3.9/3.12. CI uses simulated CLI services and no login; final run results are recorded
+  below once verified.
+- A real 1.3.0 MCP server exposed all seven tools and invoked official AGY
+  gemini-3.8-flash-high on macOS. Task d09e2a2c7f364fd3 returned GEMINI_OK
+  in 11.73 seconds, one validated attempt, no retry, 3,398 reported tokens.
 - Windows previews support native executable and standard npm Node batch
   entrypoints. Other batch wrappers fail without executing a shell. State lives
   under the current user's LOCALAPPDATA; NTFS access uses inherited ACLs.
