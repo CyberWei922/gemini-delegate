@@ -1,3 +1,51 @@
+# Release verification 1.3.1
+
+Date: 2026-10-14. Windows support is stable from this version. Real Windows
+inference used Python 3.12.10 and signed official AGY 1.3.5 on Windows build
+10.0.26200; no authenticated Windows 10 machine is claimed separately.
+
+- Runtime commit `7fb64a1ab54591ced0180537cc762198a3234087` fixes task-list
+  visibility during transient Windows reads, AGY prerequisite diagnostics and
+  installed runtime configuration in compatibility/smoke clients.
+- Local Windows: 68 runtime tests and 14 installer/protocol tests passed.
+  The original task-list race passed 60 repeated checks; cross-manager visibility
+  passed 20 repeated checks. Deterministic coverage verifies transient/persistent
+  sharing denials, privacy, bounded retries, unchanged POSIX read behavior,
+  CLI option/timeout diagnostics, stderr help output, installed custom paths,
+  process/explicit overrides and installer rejection before configuration changes.
+- All five jobs passed in [CI run 38528965549](https://github.com/CyberWei922/gemini-delegate/actions/runs/38528965549):
+  Ubuntu Python 3.9/3.12, macOS Python 3.12 and Windows Python 3.9/3.12.
+  Both Windows jobs also ran 60 local-manager and 20 cross-manager race checks.
+  CI uses simulated AGY services. Current macOS regression is verified by CI;
+  historical authenticated macOS inference remains recorded below. A new macOS
+  account/inference test was not performed in this Windows session.
+- Fresh installed MCP 1.3.1 exposed all seven tools. Connection task
+  `412a783bf3334110` completed with exactly `{"check":"GEMINI_OK"}` using
+  `gemini-3.8-flash-high`: 14.36 seconds, one validated attempt, no retry,
+  4,035 reported total tokens. The smoke client loaded installed runtime paths
+  without manually exporting the two runtime variables.
+- Installed compatibility-client file task `d7fe3a9660ff4493` processed a generated
+  public UTF-8/CRLF fixture of 32,065 bytes in two parts, with Chinese and spaces
+  in its path. It correctly extracted and deduplicated three names from the
+  beginning/middle/end. It completed in 103.75 seconds: the first answer failed
+  validation (`invalid_result`), one automatic retry succeeded. AGY reported
+  74,512 total tokens across both attempts. The original SHA-256 was unchanged;
+  manifest, input parts and temporary parameter JSON were deleted. No private
+  project files were sent to Gemini.
+- An earlier inventory task `91dee460f42c4bff`, submitted through the pre-upgrade
+  desktop connection, failed authentication/timed out; it reported zero tokens
+  and was not treated as completed work. New-package verification above used
+  a fresh 1.3.1 MCP worker. This chat retained its 1.3.0 native connection;
+  installing/updating does not prove that an already-running conversation
+  reloaded. Start a fresh conversation or use host-supported connection refresh.
+- No changes were made to the fixed High model, AGY invocation/agent policy,
+  default platform directories, POSIX process groups or Windows Job Object
+  cleanup. No paid API fallback, native external-subagent registration or
+  automatic monitor opening was added. Raw receipts, inputs/results, account
+  settings and machine-specific logs stay outside the distributed source.
+
+The records below are historical and have not been rewritten for this release.
+
 # Release verification: 1.3.0 (Windows preview)
 
 Date: 2026-10-14. Windows-specific behavior is tested in the CI matrix with

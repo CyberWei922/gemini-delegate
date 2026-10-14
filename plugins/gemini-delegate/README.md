@@ -10,7 +10,7 @@ The Skill teaches Codex to announce Gemini Delegate, dispatch independent work
 early and continue its own planning/review concurrently. These are agent
 instructions, not a forced routing hook or native Gemini subagent registration.
 
-Runtime requirements: macOS/Linux or Windows 10/11 (preview), Python 3.9+, authenticated official AGY and
+Runtime requirements: macOS/Linux or Windows 10/11, Python 3.9+, authenticated official AGY and
 the exact `gemini-3.8-flash-high` model. No third-party Python dependencies.
 The worker fixes this High model and invokes AGY with bounded print mode, JSON
 output, sandbox hints and an isolated worker agent. An AGY process is serialized
@@ -38,8 +38,9 @@ Windows state defaults to `%LOCALAPPDATA%\GeminiDelegate`. Native `.exe` and npm
 Node `.cmd` entrypoints are supported without passing task arguments through a
 shell. Unknown batch wrappers fail with an actionable error. UTF-8 is explicit
 for protocol/files; the compatibility client accepts PowerShell UTF-8 BOM JSON.
-See the [Windows manual check](../../docs/WINDOWS.md); real Windows account
-inference remains unverified until that check is completed.
+See the [Windows manual check](../../docs/WINDOWS.md) and the version-specific
+[verification record](../../docs/VERIFICATION.md). Windows support is stable
+from 1.3.1; each user's account/model/network access still needs its own check.
 
 Public webpages are fetched through a bounded read-only adapter, excluding
 private/credential URLs and non-text content. DNS proxy handling verifies public

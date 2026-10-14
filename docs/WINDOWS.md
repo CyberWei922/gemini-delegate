@@ -1,7 +1,8 @@
-# Windows 预览版验收
+# Windows 安装与验收
 
 适用于 Windows 10/11、Python 3.9+。先验证本机依赖，再用你自己的 Google 账号验收。
-自动测试使用模拟 CLI，不登录 Google；真实 Windows AGY 推理尚待用户手测。
+自 1.3.1 起正式支持 Windows；真实 Gemini High 连接及中文分块读取已验证，详见
+[验证记录](VERIFICATION.md)。自动测试使用模拟 CLI，不登录 Google；每位安装者仍需验证自己的账号和网络。
 
 ## 1. 准备环境
 

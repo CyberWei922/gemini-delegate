@@ -38,7 +38,7 @@ cd gemini-delegate
 环境要求：
 
 - macOS、Linux 或 Windows 10/11，Python 3.9+、Git、Codex CLI、官方 Antigravity CLI（`agy`）。
-- macOS 已实际调用验证；Linux 有 CI；Windows 为预览支持，真实账号推理仍需手测。
+- macOS 历史版本已实际调用验证，当前版本通过 macOS/Linux 回归；Windows 10/11 自 1.3.1 正式支持并已实际调用验证。安装者仍需核对自己的账号、网络和模型权限。
 - 使用安装者自己的 Google 账号；会员身份本身不保证能访问指定 AGY 模型。
 - 默认且固定模型为 `gemini-3.8-flash-high`。不共享作者账号、不降级模型、不改用付费 API。
 
