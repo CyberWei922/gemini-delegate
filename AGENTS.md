@@ -2,7 +2,7 @@
 
 这是给 Codex 或其他安装助手执行的完整流程。用户只需要说：
 
-> 帮我安装 [https://github.com/CyberWei922/gemini-delegate](https://github.com/CyberWei922/gemini-delegate) 。
+> 帮我按照这份指南安装：[https://github.com/CyberWei922/gemini-delegate/blob/main/AGENTS.md](https://github.com/CyberWei922/gemini-delegate/blob/main/AGENTS.md)。
 
 收到仓库链接或本文件链接并明确要求安装时，先阅读本指南，再检查源码和执行步骤。
 本指南使用标准文件名 `AGENTS.md`，位于仓库根目录；不另建 `agent.md`。
@@ -10,6 +10,17 @@
 安装范围是本插件及必要依赖。遵守用户当次选择和宿主权限要求，保留已有工作、
 其他插件、其他对话和账号设置；不读取或导出凭据，不把私人文件传给模型。
 不要把“安装成功”“工具已加载”“模型可调用”混为一谈，最后需实际调用验证。
+
+## 0. 从本指南开始执行
+
+收到用户明确的安装请求后，完整阅读本文件，然后逐步完成第 1–5 节，
+目标是安装插件并实际调用成功，而不只是给出计划或把命令交给用户。
+
+- 源码仓库：[CyberWei922/gemini-delegate](https://github.com/CyberWei922/gemini-delegate)。
+- 若 GitHub 页面未完整显示正文，读取[原始 Markdown](https://raw.githubusercontent.com/CyberWei922/gemini-delegate/main/AGENTS.md)。
+- 第 1–2 节准备源码、依赖和账号；第 3 节安装；第 4–5 节确认工具加载并实际调用验收。
+- 不执行用户已完成的重复安装，不擅自替换其他注册；首次 Google 登录由用户本人完成。
+- 完成后说明安装位置、加载状态和实际任务结果。遇到无法继续的条件，指出具体卡点。
 
 ## 1. 准备源码与环境
 

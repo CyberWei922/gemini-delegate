@@ -23,10 +23,10 @@
 
 复制这一句：
 
-> 帮我安装 [https://github.com/CyberWei922/gemini-delegate](https://github.com/CyberWei922/gemini-delegate) 。
+> 帮我按照这份指南安装：[https://github.com/CyberWei922/gemini-delegate/blob/main/AGENTS.md](https://github.com/CyberWei922/gemini-delegate/blob/main/AGENTS.md)。
 
 完整步骤都在根目录 [AGENTS.md](AGENTS.md)：检查依赖、安装、登录、验证、更新和卸载。
-建议发送仓库链接；需要查看具体步骤时，再打开安装指南。首次 Google 登录由你本人完成。
+链接直接打开安装指南，安装助手按其中步骤执行。首次 Google 登录由你本人完成。
 
 ## 前提与手动安装
 
