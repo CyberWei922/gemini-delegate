@@ -12,7 +12,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from host_tools import FileLock, detached_flags, process_alive
+from host_tools import FileLock, atomic_replace, detached_flags, process_alive
 
 TERMINAL = {'completed', 'failed', 'cancelled', 'interrupted'}
 CHILDREN = []
@@ -165,7 +165,7 @@ def serve(state, token):
     temporary = config.with_suffix('.tmp')
     temporary.write_text(json.dumps(data), encoding='utf-8')
     temporary.chmod(0o600)
-    os.replace(temporary, config)
+    atomic_replace(temporary, config)
     try:
         server.serve_forever()
     finally:

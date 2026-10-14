@@ -351,7 +351,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertNotEqual(early['tasks'][0]['status'],'completed')
         self.assertEqual(call(self.manager,'list_tasks',{'workspace':str(self.root)})['tasks'],[])
         result=self.manager.result(info['task_id'],10)
-        self.assertEqual(result['status'],'completed')
+        self.assertEqual(result['status'],'completed',result.get('error'))
         later=call(self.manager,'list_tasks',{'workspace':str(self.workspace)})
         self.assertEqual(later['tasks'][0]['result_preview'],'"DONE"')
         text=(self.manager.state/'jobs'/info['task_id']/'progress.json').read_text(encoding='utf-8')

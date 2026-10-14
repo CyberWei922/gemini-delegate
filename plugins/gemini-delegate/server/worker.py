@@ -18,7 +18,7 @@ import time
 import urllib.parse
 import urllib.request
 import uuid
-from host_tools import FileLock, default_state_dir, find_program, managed_process, stop_process
+from host_tools import atomic_replace, FileLock, default_state_dir, find_program, managed_process, stop_process
 
 MODEL = 'gemini-3.8-flash-high'
 VERSION = json.loads((Path(__file__).resolve().parents[1] / 'plugin.json').read_text(encoding='utf-8'))['version']
@@ -407,7 +407,7 @@ class Manager:
         temporary = Path(job['root']) / ('.progress-' + uuid.uuid4().hex + '.tmp')
         temporary.write_text(json.dumps(data, ensure_ascii=False), encoding='utf-8')
         temporary.chmod(0o600)
-        os.replace(temporary, Path(job['root']) / 'progress.json')
+        atomic_replace(temporary, Path(job['root']) / 'progress.json')
 
     def _set_status(self, job, status):
         job['status'] = status
@@ -666,7 +666,7 @@ class Manager:
                 temporary = root/'.metadata.tmp'
                 temporary.write_text(json.dumps(self.result(job['id']),ensure_ascii=False,indent=2),encoding='utf-8')
                 temporary.chmod(0o600)
-                os.replace(temporary,root/'metadata.json')
+                atomic_replace(temporary,root/'metadata.json')
             finally:
                 job['done'].set()
 
@@ -750,7 +750,7 @@ class Manager:
                 backup.write_bytes(old);backup.chmod(0o600)
                 tmp = path.with_name('.'+path.name+'.gemini-'+jid)
                 tmp.write_bytes(new);tmp.chmod(path.stat().st_mode & 0o777)
-                os.replace(tmp,path)
+                atomic_replace(tmp,path)
                 applied.append(path)
         except OSError:
             for path,old,new in originals:
@@ -766,7 +766,7 @@ class Manager:
             path = Path(job['root']) / '.progress.tmp'
             path.write_text(json.dumps(snapshot,ensure_ascii=False),encoding='utf-8')
             path.chmod(0o600)
-            os.replace(path,Path(job['root'])/'progress.json')
+            atomic_replace(path,Path(job['root'])/'progress.json')
         return {'status':'applied','files':[str(x)for x in applied],'backup_directory':str(Path(job['root'])/'backups')}
 
     def status(self):

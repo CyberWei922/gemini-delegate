@@ -6,16 +6,31 @@ import subprocess
 import sys
 import tempfile
 import time
+import threading
 import unittest
 from unittest import mock
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'server'))
 import host_tools
-from host_tools import FileLock, WINDOWS, WindowsJob, command_argv, process_alive, run_command
+from host_tools import FileLock, WINDOWS, WindowsJob, atomic_replace, command_argv, process_alive, run_command
 from worker import WorkerError, run_process
 
 
 class HostTests(unittest.TestCase):
+    @unittest.skipUnless(WINDOWS,'Real Windows file sharing required')
+    def test_atomic_replace_waits_for_a_reader_to_release_the_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target=Path(directory)/'progress.json';source=Path(directory)/'new.tmp'
+            target.write_bytes(b'old');source.write_bytes(b'new')
+            stream=target.open('rb')
+            timer=threading.Timer(.2,stream.close);timer.start()
+            try:
+                atomic_replace(source,target)
+                self.assertEqual(target.read_bytes(),b'new')
+                self.assertFalse(source.exists())
+            finally:
+                timer.join();stream.close()
+
     def test_lock_excludes_another_process_and_releases(self):
         with tempfile.TemporaryDirectory(prefix='Gemini 锁 ') as directory:
             path=Path(directory)/'shared.lock'

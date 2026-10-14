@@ -21,6 +21,20 @@ def configure_stdio():
             stream.reconfigure(encoding='utf-8')
 
 
+def atomic_replace(source, target, timeout=1):
+    """A Windows reader briefly denies replacement; keep the old file intact."""
+    deadline = time.monotonic()+timeout
+    while True:
+        try:
+            os.replace(source, target)
+            return
+        except PermissionError as error:
+            if (not WINDOWS or getattr(error, 'winerror', None) not in (5, 32, 33)
+                    or not Path(target).exists() or time.monotonic() >= deadline):
+                raise
+            time.sleep(.01)
+
+
 def default_state_dir():
     override = os.environ.get('GEMINI_DELEGATE_STATE_DIR')
     if override:

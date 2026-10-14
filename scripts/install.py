@@ -12,7 +12,7 @@ import tempfile
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO/'plugins/gemini-delegate/server'))
-from host_tools import command_argv, configure_stdio, default_state_dir, find_program, run_command
+from host_tools import atomic_replace, command_argv, configure_stdio, default_state_dir, find_program, run_command
 MARKETPLACE = 'gemini-delegate-community'
 SELECTOR = 'gemini-delegate@' + MARKETPLACE
 SERVER = 'gemini_delegate'
@@ -35,7 +35,7 @@ def write_json(path, data):
             json.dump(data, stream, ensure_ascii=False, indent=2)
             stream.write('\n')
         os.chmod(name, 0o600)
-        os.replace(name, path)
+        atomic_replace(name, path)
     finally:
         if Path(name).exists():
             Path(name).unlink()

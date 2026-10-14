@@ -28,3 +28,10 @@ jobs:
           python-version: ${{ matrix.python }}
       - run: python -m unittest discover -s plugins/gemini-delegate/tests -v
       - run: python -m unittest discover -s tests -v
+      - name: Repeat Windows live-record race regression
+        if: runner.os == 'Windows'
+        run: >-
+          python -c "import sys,unittest; sys.path.insert(0,'plugins/gemini-delegate/tests');
+          from test_worker import WorkflowTests;
+          result=unittest.TextTestRunner().run(unittest.TestSuite(WorkflowTests('test_live_task_records_are_project_scoped_and_keep_preview') for _ in range(20)));
+          sys.exit(not result.wasSuccessful())"

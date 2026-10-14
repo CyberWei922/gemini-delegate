@@ -7,10 +7,11 @@
 - 将完整安装、验证、更新和卸载流程集中到中文 AGENTS.md。
 - 补充安装助手从指南入口获取源码、逐步执行安装并实际验收的说明。
 - Windows 10/11 预览适配：字节文件锁、Job Object 与启动门控、进程树取消/超时清理、LOCALAPPDATA 状态目录。
+- 对 Windows 短暂文件共享冲突增加有上限的原子替换重试，保留旧任务记录直至替换成功。
 - 原生和 npm Node CLI 入口通过参数数组调用，未知批处理拒绝执行；中文路径、UTF-8 协议和 BOM JSON 兼容。
 - 跨平台流式输出有硬上限；超时保留安全字节统计，清理可重复调用；系统异常保留 errno/winerror 便于排查。
 - Windows Python 3.9/3.12 CI 和 PowerShell 手动验收指南；真实 Windows AGY 登录与会员推理仍待手测。
-- 验证范围：43 个运行时测试（macOS 跳过 3 个 Windows 专项）、11 个安装与协议测试；CI 和实际调用见 docs/VERIFICATION.md。
+- 验证范围：44 个运行时测试（macOS 跳过 4 个 Windows 专项）、11 个安装与协议测试；CI 和实际调用见 docs/VERIFICATION.md。
 
 ## 1.2.2 — 2026-10-14
 
