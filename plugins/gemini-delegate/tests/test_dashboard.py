@@ -32,9 +32,9 @@ class DashboardTests(unittest.TestCase):
                     url=ensure_dashboard(state)
                 except RuntimeError as error:
                     log=state/'dashboard.log'
-                    diagnostic=log.read_text()[-2000:] if log.exists() else 'No startup log'
+                    diagnostic=log.read_text(encoding='utf-8')[-2000:] if log.exists() else 'No startup log'
                     self.fail(str(error)+'\n'+diagnostic)
-                config=json.loads((state/'dashboard.json').read_text())
+                config=json.loads((state/'dashboard.json').read_text(encoding='utf-8'))
                 pid=config['pid']
                 self.assertEqual(url,ensure_dashboard(state))
                 opener=urllib.request.build_opener(urllib.request.ProxyHandler({}))
@@ -57,9 +57,9 @@ class DashboardTests(unittest.TestCase):
                 error.exception.close()
             finally:
                 if pid:
-                    os.kill(pid,signal.SIGTERM)
                     for child in CHILDREN:
-                        if child.pid==pid:child.wait(timeout=3)
+                        if child.pid==pid:
+                            child.terminate();child.wait(timeout=3)
 
     def test_interrupted_owner_and_bounded_result_preview(self):
         task=public_task({'id':'a','status':'running','owner_pid':999999999,
@@ -72,8 +72,8 @@ class DashboardTests(unittest.TestCase):
     def test_historical_records_and_corrupt_snapshot_fallback(self):
         with tempfile.TemporaryDirectory() as d:
             root=Path(d)/'jobs'/'abcdef0123456789';root.mkdir(parents=True)
-            (root/'progress.json').write_text('{bad')
-            (root/'metadata.json').write_text(json.dumps({'id':root.name,'status':'completed','workspace':'/project','created_at':1,'result':{'n':3}}))
+            (root/'progress.json').write_text('{bad', encoding='utf-8')
+            (root/'metadata.json').write_text(json.dumps({'id':root.name,'status':'completed','workspace':'/project','created_at':1,'result':{'n':3}}), encoding='utf-8')
             tasks=read_tasks(d,'/project')
             self.assertEqual(len(tasks),1)
             self.assertIn('历史任务',tasks[0]['title'])

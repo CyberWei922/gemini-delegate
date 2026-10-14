@@ -1,6 +1,5 @@
 """Read-only, loopback-only task monitor shared by local plugin processes."""
 import argparse
-import fcntl
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
@@ -13,6 +12,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from host_tools import FileLock, detached_flags, process_alive
 
 TERMINAL = {'completed', 'failed', 'cancelled', 'interrupted'}
 CHILDREN = []
@@ -48,12 +48,8 @@ def public_task(data):
     task['changes'] = [{k: c[k] for k in ('path', 'artifact') if k in c}
                        for c in data.get('changes', [])]
     if task.get('status') not in TERMINAL and task.get('owner_pid'):
-        try:
-            os.kill(task['owner_pid'], 0)
-        except ProcessLookupError:
+        if not process_alive(task['owner_pid']):
             task['status'] = 'interrupted'
-        except PermissionError:
-            pass
     return task
 
 
@@ -81,11 +77,10 @@ def ensure_dashboard(state):
     state = Path(state).resolve()
     state.mkdir(parents=True, exist_ok=True, mode=0o700)
     config = state / 'dashboard.json'
-    with (state / 'dashboard.lock').open('a') as lock:
-        os.chmod(lock.name, 0o600)
-        fcntl.flock(lock, fcntl.LOCK_EX)
+    with FileLock(state / 'dashboard.lock') as lock:
+        lock.acquire(blocking=True, timeout=20)
         try:
-            old = json.loads(config.read_text())
+            old = json.loads(config.read_text(encoding='utf-8'))
             if old.get('state') == str(state):
                 opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
                 with opener.open(old['url'] + '&health=1', timeout=1) as r:
@@ -100,7 +95,7 @@ def ensure_dashboard(state):
             os.chmod(log.name, 0o600)
             process = subprocess.Popen(
                 [sys.executable, str(Path(__file__).resolve()), '--state', str(state)],
-                stdin=subprocess.PIPE, stdout=log, stderr=log, start_new_session=True)
+                stdin=subprocess.PIPE, stdout=log, stderr=log, **detached_flags())
             CHILDREN.append(process)
             process.stdin.write(token.encode())
             process.stdin.close()
@@ -111,7 +106,7 @@ def ensure_dashboard(state):
             if process.poll() is not None:
                 raise RuntimeError('Task monitor failed to start; see dashboard.log')
             try:
-                ready = json.loads(config.read_text())
+                ready = json.loads(config.read_text(encoding='utf-8'))
                 if ready.get('token') == token:
                     return ready['url']
             except (OSError, ValueError):
@@ -168,7 +163,7 @@ def serve(state, token):
     data = {'state': str(state), 'pid': os.getpid(), 'token': token,
             'url': 'http://127.0.0.1:' + str(server.server_port) + '/?token=' + token}
     temporary = config.with_suffix('.tmp')
-    temporary.write_text(json.dumps(data))
+    temporary.write_text(json.dumps(data), encoding='utf-8')
     temporary.chmod(0o600)
     os.replace(temporary, config)
     try:

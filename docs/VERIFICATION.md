@@ -1,4 +1,24 @@
-# Release verification: 1.2.2
+# Release verification: 1.3.0 (Windows preview)
+
+Date: 2026-10-14. Windows-specific behavior is tested in the CI matrix with
+Python 3.9/3.12; authenticated Windows AGY inference remains pending manual
+verification using [WINDOWS.md](WINDOWS.md).
+
+- Local macOS: 42 runtime tests (3 Windows-only skips) and 10 installer tests
+  passed. Added cross-process file locking, non-destructive PID probing,
+  argument preservation, parent-exit descendant cleanup, bounded streaming
+  output, Windows Job assignment gating/failure and UTF-8 BOM settings coverage.
+- CI includes Ubuntu Python 3.9/3.12, macOS Python 3.12 and Windows Python
+  3.9/3.12. Actual run results and the new-package macOS AGY smoke check will be
+  recorded here after completion; CI uses simulated CLI services and no login.
+- Windows previews support native executable and standard npm Node batch
+  entrypoints. Other batch wrappers fail without executing a shell. State lives
+  under the current user's LOCALAPPDATA; NTFS access uses inherited ACLs.
+- No native external-subagent registration, paid API fallback or automatic
+  webpage was added. No real Windows/third-party-account login or membership
+  inference is claimed.
+
+## Historical verification: 1.2.2
 
 Date: 2026-10-14. Verified on macOS with Python 3.14 and official AGY 1.3.4.
 

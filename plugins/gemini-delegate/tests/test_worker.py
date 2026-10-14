@@ -16,6 +16,7 @@ from worker import (Manager, WorkerError, decode_result, digest, run_process,
                     validate_schema, public_url, text_chunks, write_input_bundle,
                     INPUT_CHUNK_BYTES, MODEL)
 from main import call
+from host_tools import WINDOWS, process_alive
 
 
 class ResultTests(unittest.TestCase):
@@ -56,6 +57,14 @@ class ResultTests(unittest.TestCase):
 
 
 class ProcessTests(unittest.TestCase):
+    def test_output_limit_stops_streaming_producer(self):
+        code='import sys,time;sys.stdout.buffer.write(b"x"*3000000);sys.stdout.flush();time.sleep(30)'
+        started=time.monotonic()
+        with self.assertRaises(WorkerError) as caught:
+            run_process([sys.executable,'-c',code],Path.home(),10)
+        self.assertEqual(caught.exception.code,'output_limit')
+        self.assertLess(time.monotonic()-started,5)
+
     def test_timeout_keeps_safe_output_size_diagnostics(self):
         code='import sys,time; print("partial",flush=True); print("diagnostic",file=sys.stderr,flush=True); time.sleep(30)'
         with self.assertRaises(WorkerError) as caught:
@@ -68,16 +77,19 @@ class ProcessTests(unittest.TestCase):
     def test_hard_timeout_reaps_descendants(self):
         with tempfile.TemporaryDirectory() as d:
             marker=Path(d)/'pid'
-            code='import subprocess,time,pathlib; p=subprocess.Popen(["'+sys.executable+'","-c","import time; time.sleep(30)"]); pathlib.Path("'+str(marker)+'").write_text(str(p.pid)); time.sleep(30)'
+            code='import subprocess,time,pathlib,sys; p=subprocess.Popen([sys.executable,"-c","import time; time.sleep(30)"]); pathlib.Path('+repr(str(marker))+').write_text(str(p.pid)); time.sleep(30)'
             start=time.monotonic()
             with self.assertRaises(WorkerError)as c:run_process([sys.executable,'-c',code],d,.6)
             self.assertEqual(c.exception.code,'timeout')
             self.assertLess(time.monotonic()-start,5)
             if marker.exists():
-                pid=int(marker.read_text())
+                pid=int(marker.read_text(encoding='utf-8'))
                 # ps can briefly report a zombie while the OS reaps it; it must not be running.
-                result=subprocess.run(['ps','-p',str(pid),'-o','stat='],capture_output=True,text=True)
-                self.assertTrue(not result.stdout.strip() or result.stdout.strip().startswith('Z'))
+                if WINDOWS:
+                    self.assertFalse(process_alive(pid))
+                else:
+                    result=subprocess.run(['ps','-p',str(pid),'-o','stat='],capture_output=True,text=True)
+                    self.assertTrue(not result.stdout.strip() or result.stdout.strip().startswith('Z'))
 
     def test_cancel_stops_inflight_process(self):
         event=threading.Event()
@@ -96,9 +108,9 @@ class WorkflowTests(unittest.TestCase):
         self.temp=tempfile.TemporaryDirectory()
         self.root=Path(self.temp.name)
         self.workspace=self.root/'workspace';self.workspace.mkdir()
-        self.source=self.workspace/'sample.txt';self.source.write_text('old\n')
-        self.worker=self.root/'fake-agy'
-        self.worker.write_text('#!'+sys.executable+'\nimport json,sys\nprint(json.dumps({"status":"SUCCESS","response":json.dumps({"summary":"Changed sample","files":[{"path":"sample.txt","content":"new\\n"}]}),"usage":{"input_tokens":100,"output_tokens":20}}))\n')
+        self.source=self.workspace/'sample.txt';self.source.write_text('old\n', encoding='utf-8')
+        self.worker=self.root/'fake-agy.py'
+        self.worker.write_text('#!'+sys.executable+'\nimport json,sys\nprint(json.dumps({"status":"SUCCESS","response":json.dumps({"summary":"Changed sample","files":[{"path":"sample.txt","content":"new\\n"}]}),"usage":{"input_tokens":100,"output_tokens":20}}))\n', encoding='utf-8')
         self.worker.chmod(0o700)
         self.manager=Manager(self.root/'state',str(self.worker),attempt_seconds=2)
 
@@ -113,33 +125,33 @@ class WorkflowTests(unittest.TestCase):
 
     def test_edit_is_staged_then_applied_with_backup(self):
         jid,result=self.task()
-        self.assertEqual(self.source.read_text(),'old\n')
+        self.assertEqual(self.source.read_text(encoding='utf-8'),'old\n')
         self.assertEqual(result['model'],MODEL)
         with self.assertRaises(WorkerError):call(self.manager,'apply_task_changes',{'task_id':jid,'reviewed':False})
         applied=call(self.manager,'apply_task_changes',{'task_id':jid,'reviewed':True})
-        self.assertEqual(self.source.read_text(),'new\n')
-        self.assertEqual((Path(applied['backup_directory'])/'sample.txt').read_text(),'old\n')
+        self.assertEqual(self.source.read_text(encoding='utf-8'),'new\n')
+        self.assertEqual((Path(applied['backup_directory'])/'sample.txt').read_text(encoding='utf-8'),'old\n')
 
     def test_conflict_and_tamper_fail_without_overwrite(self):
         jid,result=self.task()
-        self.source.write_text('user changed\n')
+        self.source.write_text('user changed\n', encoding='utf-8')
         with self.assertRaises(WorkerError)as c:self.manager.apply(jid)
         self.assertEqual(c.exception.code,'conflict')
-        self.assertEqual(self.source.read_text(),'user changed\n')
-        self.source.write_text('old\n')
-        Path(result['changes'][0]['artifact']).write_text('tampered\n')
+        self.assertEqual(self.source.read_text(encoding='utf-8'),'user changed\n')
+        self.source.write_text('old\n', encoding='utf-8')
+        Path(result['changes'][0]['artifact']).write_text('tampered\n', encoding='utf-8')
         with self.assertRaises(WorkerError)as c:self.manager.apply(jid)
         self.assertEqual(c.exception.code,'invalid_changes')
-        self.assertEqual(self.source.read_text(),'old\n')
+        self.assertEqual(self.source.read_text(encoding='utf-8'),'old\n')
 
     def test_inputs_outside_scope_and_secrets_rejected(self):
-        outsider=self.root/'outside.txt';outsider.write_text('outside')
+        outsider=self.root/'outside.txt';outsider.write_text('outside', encoding='utf-8')
         for filename in [str(outsider),'.env']:
-            (self.workspace/'.env').write_text('SECRET=x')
+            (self.workspace/'.env').write_text('SECRET=x', encoding='utf-8')
             with self.assertRaises(WorkerError):self.manager.submit({'instruction':'read','workspace':str(self.workspace),'input_files':[filename]})
 
     def test_bad_output_retries_once_then_fails(self):
-        self.worker.write_text('#!'+sys.executable+'\nimport json\nprint(json.dumps({"status":"SUCCESS","response":""}))\n')
+        self.worker.write_text('#!'+sys.executable+'\nimport json\nprint(json.dumps({"status":"SUCCESS","response":""}))\n', encoding='utf-8')
         jid=self.manager.submit({'instruction':'extract','timeout_seconds':15})['task_id']
         result=self.manager.result(jid,10)
         self.assertEqual(result['status'],'failed')
@@ -243,8 +255,8 @@ class WorkflowTests(unittest.TestCase):
         self.manager.attempt_seconds=None
         def inspect(argv,root,*args):
             root=Path(root)
-            manifest=json.loads((root/'input.json').read_text())
-            self.assertGreater(len((root/'input.json').read_text().splitlines()),1)
+            manifest=json.loads((root/'input.json').read_text(encoding='utf-8'))
+            self.assertGreater(len((root/'input.json').read_text(encoding='utf-8').splitlines()),1)
             self.assertNotIn('content',manifest['files'][0])
             self.assertLessEqual((root/'input.json').stat().st_size,INPUT_CHUNK_BYTES)
             parts=manifest['files'][0]['parts']
@@ -255,7 +267,7 @@ class WorkflowTests(unittest.TestCase):
                 self.assertEqual(item['byte_offset'],len(restored))
                 self.assertLessEqual(len(body),INPUT_CHUNK_BYTES)
                 self.assertEqual(body.decode('utf-8').encode('utf-8'),body)
-                self.assertEqual(path.stat().st_mode & 0o777,0o600)
+                if not WINDOWS:self.assertEqual(path.stat().st_mode & 0o777,0o600)
                 self.assertEqual(item['sha256'],digest(body))
                 restored+=body
             self.assertEqual(restored,original)
@@ -300,7 +312,7 @@ class WorkflowTests(unittest.TestCase):
         try:
             self.assertEqual(reopened.result(jid)['status'],'completed')
             reopened.apply(jid)
-            self.assertEqual(self.source.read_text(),'new\n')
+            self.assertEqual(self.source.read_text(encoding='utf-8'),'new\n')
         finally:reopened.close()
         self.assertFalse((path.parent/'input.json').exists())
 
@@ -320,7 +332,7 @@ class WorkflowTests(unittest.TestCase):
         finally:second.close()
 
     def test_live_task_records_are_project_scoped_and_keep_preview(self):
-        self.worker.write_text('#!'+sys.executable+'\nimport time,json\ntime.sleep(.4)\nprint(json.dumps({"status":"SUCCESS","response":"DONE"}))\n')
+        self.worker.write_text('#!'+sys.executable+'\nimport time,json\ntime.sleep(.4)\nprint(json.dumps({"status":"SUCCESS","response":"DONE"}))\n', encoding='utf-8')
         info=call(self.manager,'delegate_task',{'title':'Visible task','instruction':'Return DONE','context':'PRIVATE_CONTEXT','workspace':str(self.workspace),'timeout_seconds':15})
         early=call(self.manager,'list_tasks',{'workspace':str(self.workspace)})
         self.assertEqual(len(early['tasks']),1)
@@ -331,7 +343,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(result['status'],'completed')
         later=call(self.manager,'list_tasks',{'workspace':str(self.workspace)})
         self.assertEqual(later['tasks'][0]['result_preview'],'"DONE"')
-        text=(self.manager.state/'jobs'/info['task_id']/'progress.json').read_text()
+        text=(self.manager.state/'jobs'/info['task_id']/'progress.json').read_text(encoding='utf-8')
         self.assertNotIn('PRIVATE_CONTEXT',text)
         self.assertIn('agy_started_at',later['tasks'][0])
 

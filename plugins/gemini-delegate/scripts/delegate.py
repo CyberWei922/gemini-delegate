@@ -8,9 +8,11 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'server'))
 from main import call
 from worker import Manager
+from host_tools import configure_stdio
 
 
 def run():
+    configure_stdio()
     parser = argparse.ArgumentParser()
     parser.add_argument('--monitor', action='store_true')
     parser.add_argument('--list', action='store_true')
@@ -31,7 +33,7 @@ def run():
             print(json.dumps(call(manager, 'list_tasks', {'workspace':args.workspace}),ensure_ascii=False),flush=True)
             return
         if args.input:
-            task = json.loads(Path(args.input).read_text(encoding='utf-8'))
+            task = json.loads(Path(args.input).read_text(encoding='utf-8-sig'))
             task.setdefault('workspace', args.workspace)
         else:
             if not args.instruction:

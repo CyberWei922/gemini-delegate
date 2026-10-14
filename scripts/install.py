@@ -11,6 +11,8 @@ import sys
 import tempfile
 
 REPO = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO/'plugins/gemini-delegate/server'))
+from host_tools import command_argv, configure_stdio, default_state_dir, find_program, run_command
 MARKETPLACE = 'gemini-delegate-community'
 SELECTOR = 'gemini-delegate@' + MARKETPLACE
 SERVER = 'gemini_delegate'
@@ -40,14 +42,15 @@ def write_json(path, data):
 
 
 def resolve_program(value, name):
-    path = shutil.which(value or name)
+    path = find_program(value, name)
     if not path:
         raise InstallError('Missing executable: ' + (value or name))
+    command_argv([path])  # Validate Windows launcher before changing any config.
     return str(Path(path).resolve())
 
 
 def command(cli, args, allow_missing=False):
-    run = subprocess.run([cli, *args], capture_output=True, text=True, timeout=45)
+    run = run_command([cli, *args], timeout=45)
     if run.returncode:
         if allow_missing and 'no mcp server named' in run.stderr.lower():
             return None
@@ -77,7 +80,7 @@ def prepare(target, python, env=None):
         raise InstallError('Destination is not owned by this installer: ' + str(target))
     if target.is_symlink():
         raise InstallError('Installation destination must not be a symlink.')
-    old = json.loads(marker.read_text()) if marker.exists() else {}
+    old = json.loads(marker.read_text(encoding='utf-8')) if marker.exists() else {}
     target.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='.gemini-stage-', dir=target.parent) as staging:
         stage = Path(staging) / 'package'
@@ -90,10 +93,10 @@ def prepare(target, python, env=None):
             'cwd': str(target / 'plugin'), 'env': env or {}}}}
         write_json(plugin / '.mcp.json', actual)
         write_json(plugin / 'mcp.json', actual)
-        catalog = json.loads((REPO / '.agents/plugins/marketplace.json').read_text())
+        catalog = json.loads((REPO / '.agents/plugins/marketplace.json').read_text(encoding='utf-8'))
         catalog['plugins'][0]['source']['path'] = './plugin'
         write_json(stage / '.agents/plugins/marketplace.json', catalog)
-        receipt = {**old, 'version': json.loads((plugin / 'plugin.json').read_text())['version'],
+        receipt = {**old, 'version': json.loads((plugin / 'plugin.json').read_text(encoding='utf-8'))['version'],
                    'python': python, 'target': str(target), 'marketplace': MARKETPLACE,
                    'server': SERVER, 'prepared': True}
         write_json(stage / '.install-state.json', receipt)
@@ -114,7 +117,7 @@ def configure_agy(path, state, keep_credit_setting=False):
     path = Path(path)
     if path.is_symlink():
         raise InstallError('AGY settings must not be a symlink.')
-    data = json.loads(path.read_text()) if path.exists() else {}
+    data = json.loads(path.read_text(encoding='utf-8-sig')) if path.exists() else {}
     if not isinstance(data, dict):
         raise InstallError('AGY settings must be a JSON object.')
     permissions = data.setdefault('permissions', {})
@@ -144,6 +147,7 @@ def configure_agy(path, state, keep_credit_setting=False):
 
 
 def main():
+    configure_stdio()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--codex-home', type=Path,
                         default=default_codex_home())
@@ -152,7 +156,7 @@ def main():
     parser.add_argument('--agy-settings', type=Path,
                         default=Path.home() / '.gemini/antigravity-cli/settings.json')
     parser.add_argument('--state-dir', type=Path,
-                        default=Path(os.environ.get('GEMINI_DELEGATE_STATE_DIR', Path.home() / '.local/share/gemini-delegate')))
+                        default=default_state_dir())
     parser.add_argument('--dry-run', action='store_true')
     parser.add_argument('--prepare-only', action='store_true',
                         help='Stage files only; do not change Codex or AGY settings')
@@ -161,8 +165,8 @@ def main():
     parser.add_argument('--keep-credit-setting', action='store_true',
                         help='Preserve AGY additional-credit preference instead of disabling it')
     args = parser.parse_args()
-    if os.name != 'posix' or sys.version_info < (3, 9):
-        raise InstallError('macOS/Linux and Python 3.9+ are required. Windows is not supported.')
+    if os.name not in ('posix','nt') or sys.version_info < (3, 9):
+        raise InstallError('macOS/Linux/Windows and Python 3.9+ are required.')
     python = str(Path(sys.executable).resolve())
     target = args.codex_home.expanduser().resolve() / 'plugins/sources' / MARKETPLACE
     plan = {'target': str(target), 'python': python, 'plugin': SELECTOR,
@@ -200,7 +204,7 @@ def main():
             ('plugin', ['plugin', 'add', SELECTOR, '--json']),
             ('mcp', ['mcp', 'add', SERVER, '--env', 'GEMINI_DELEGATE_STATE_DIR='+env['GEMINI_DELEGATE_STATE_DIR'],
                      '--env', 'GEMINI_DELEGATE_AGY='+env['GEMINI_DELEGATE_AGY'], '--', python, str(target / 'plugin/server/main.py')])]:
-            command(cli, argv) if label != 'mcp' else subprocess.run([cli, *argv], check=True, timeout=45, capture_output=True)
+            command(cli, argv) if label != 'mcp' else run_command([cli, *argv], check=True, timeout=45)
             if label not in steps:
                 steps.append(label)
             receipt['completed_steps'] = steps

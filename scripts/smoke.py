@@ -3,21 +3,35 @@
 import argparse
 import json
 from pathlib import Path
-import selectors
+import collections
+import os
+import queue
 import subprocess
 import sys
 import time
+import threading
 
 
 def main():
+    sys.stdout.reconfigure(encoding='utf-8')
+    sys.stderr.reconfigure(encoding='utf-8')
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--plugin-root',type=Path,default=Path(__file__).resolve().parents[1]/'plugins/gemini-delegate')
     parser.add_argument('--file-task',action='store_true',help='Verify real reading of chunked worker/test source snapshots')
     parser.add_argument('--workspace',type=Path,help='Real workspace containing the supplied plugin source files')
     parser.add_argument('--timeout',type=int,default=180)
     args=parser.parse_args()
-    p=subprocess.Popen([sys.executable,str(args.plugin_root.resolve()/'server/main.py')],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,bufsize=1)
-    selector=selectors.DefaultSelector();selector.register(p.stdout,selectors.EVENT_READ)
+    p=subprocess.Popen([sys.executable,str(args.plugin_root.resolve()/'server/main.py')],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,encoding='utf-8',bufsize=1,env={**os.environ,'PYTHONUTF8':'1'})
+    replies=queue.Queue();diagnostics=collections.deque(maxlen=40)
+    def read_stdout():
+        for line in p.stdout:
+            replies.put(line)
+        replies.put(None)
+    def read_stderr():
+        for line in p.stderr:
+            diagnostics.append(line)
+    readers=[threading.Thread(target=read_stdout,daemon=True),threading.Thread(target=read_stderr,daemon=True)]
+    for reader in readers:reader.start()
     ident=0
     def rpc(method,params=None):
         nonlocal ident
@@ -25,13 +39,13 @@ def main():
         p.stdin.write(json.dumps({'jsonrpc':'2.0','id':ident,'method':method,'params':params or {}})+'\n');p.stdin.flush()
         deadline=time.monotonic()+30
         while time.monotonic()<deadline:
-            if selector.select(min(2,max(0,deadline-time.monotonic()))):
-                line=p.stdout.readline()
-                if not line:raise RuntimeError('MCP server exited')
-                data=json.loads(line)
-                if data.get('id')==ident:
-                    if 'error' in data:raise RuntimeError(data['error'])
-                    return data['result']
+            try:line=replies.get(timeout=min(2,max(0,deadline-time.monotonic())))
+            except queue.Empty:continue
+            if line is None:raise RuntimeError('MCP server exited: '+''.join(diagnostics)[-2000:])
+            data=json.loads(line)
+            if data.get('id')==ident:
+                if 'error' in data:raise RuntimeError(data['error'])
+                return data['result']
         raise TimeoutError(method)
     def tool(name,arguments):
         r=rpc('tools/call',{'name':name,'arguments':arguments})
@@ -64,7 +78,8 @@ def main():
         p.stdin.close()
         try:p.wait(timeout=10)
         except subprocess.TimeoutExpired:p.terminate();p.wait(timeout=5)
-        selector.close()
+        for reader in readers:reader.join(timeout=3)
+        p.stdout.close();p.stderr.close()
 
 
 if __name__=='__main__':main()

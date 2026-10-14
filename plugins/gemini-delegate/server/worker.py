@@ -1,7 +1,6 @@
 """Local AGY worker. Only official CLI authentication is used."""
 import concurrent.futures
 import contextlib
-import fcntl
 import hashlib
 import html
 from html.parser import HTMLParser
@@ -11,7 +10,6 @@ import os
 from pathlib import Path
 import re
 import shutil
-import signal
 import socket
 import subprocess
 import sys
@@ -20,9 +18,10 @@ import time
 import urllib.parse
 import urllib.request
 import uuid
+from host_tools import FileLock, default_state_dir, find_program, managed_process, stop_process
 
 MODEL = 'gemini-3.8-flash-high'
-VERSION = json.loads((Path(__file__).resolve().parents[1] / 'plugin.json').read_text())['version']
+VERSION = json.loads((Path(__file__).resolve().parents[1] / 'plugin.json').read_text(encoding='utf-8'))['version']
 MAX_CONTEXT = 6000
 MAX_FILE = 128 * 1024
 MAX_OUTPUT = 2 * 1024 * 1024
@@ -204,53 +203,63 @@ def decode_result(stdout, stderr, returncode, response_type='text', schema=None)
     return data, envelope.get('usage') or {}
 
 
-def stop_process(proc):
-    if proc.poll() is not None:
-        return
-    for sig, delay in [(signal.SIGINT, 1.5), (signal.SIGTERM, .5), (signal.SIGKILL, .5)]:
-        try:
-            os.killpg(proc.pid, sig)
-        except ProcessLookupError:
-            break
-        try:
-            proc.wait(timeout=delay)
-            break
-        except subprocess.TimeoutExpired:
-            continue
-    # Kill remaining descendants even if the parent exited on SIGINT.
-    try:
-        os.killpg(proc.pid, signal.SIGKILL)
-    except ProcessLookupError:
-        pass
-
-
 def run_process(argv, cwd, timeout, cancel=None, on_process=None):
     cancel = cancel or threading.Event()
-    with subprocess.Popen(argv, cwd=cwd, stdin=subprocess.DEVNULL,
-                          stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                          start_new_session=True) as proc:
+    with managed_process(argv, cwd=cwd, stdin=subprocess.DEVNULL,
+                         stdout=subprocess.PIPE, stderr=subprocess.PIPE) as proc:
         if on_process:
             on_process(proc)
         end = time.monotonic()+timeout
-        captured = (0, 0)
-        while True:
-            if cancel.is_set():
-                stop_process(proc)
-                raise WorkerError('cancelled', 'Task cancelled')
-            left = end-time.monotonic()
-            if left <= 0:
-                stop_process(proc)
-                raise WorkerError('timeout', 'Hard deadline reached; process group stopped',
-                                  {'timeout_seconds':round(timeout,2),
-                                   'stdout_bytes':captured[0], 'stderr_bytes':captured[1]})
+        buffers = [bytearray(), bytearray()]
+        finished = [False, False]
+        errors = []
+        condition = threading.Condition()
+        def read_pipe(index, stream):
             try:
-                out, err = proc.communicate(timeout=min(.25, left))
-                if len(out)+len(err) > MAX_OUTPUT:
+                while True:
+                    chunk = stream.read1(16384)
+                    if not chunk:
+                        break
+                    with condition:
+                        remaining = MAX_OUTPUT+1-sum(map(len, buffers))
+                        buffers[index].extend(chunk[:max(0, remaining)])
+                        condition.notify_all()
+            except OSError as error:
+                with condition:
+                    errors.append(error)
+            finally:
+                with condition:
+                    finished[index] = True
+                    condition.notify_all()
+        readers = [threading.Thread(target=read_pipe, args=(i, stream), daemon=True)
+                   for i, stream in enumerate((proc.stdout, proc.stderr))]
+        for reader in readers:
+            reader.start()
+        try:
+            while True:
+                with condition:
+                    captured = tuple(map(len, buffers))
+                    done = all(finished)
+                    failed = bool(errors)
+                if cancel.is_set():
+                    raise WorkerError('cancelled', 'Task cancelled')
+                if sum(captured) > MAX_OUTPUT:
                     raise WorkerError('output_limit', 'AGY output exceeded the limit')
-                return out.decode('utf-8', 'replace'), err.decode('utf-8', 'replace'), proc.returncode
-            except subprocess.TimeoutExpired as e:
-                captured = (len(e.output or b''), len(e.stderr or b''))
-                continue
+                if failed:
+                    raise WorkerError('process_io', 'Unable to read CLI output')
+                if done and proc.poll() is not None:
+                    return (*(bytes(data).decode('utf-8', 'replace') for data in buffers), proc.returncode)
+                left = end-time.monotonic()
+                if left <= 0:
+                    raise WorkerError('timeout', 'Hard deadline reached; process tree stopped',
+                                      {'timeout_seconds':round(timeout,2),
+                                       'stdout_bytes':captured[0], 'stderr_bytes':captured[1]})
+                with condition:
+                    condition.wait(timeout=min(.05, left))
+        finally:
+            stop_process(proc)
+            for reader in readers:
+                reader.join(timeout=3)
 
 
 class TextParser(HTMLParser):
@@ -376,10 +385,10 @@ def search_sources(query, count=3, timeout=30, cancel=None, on_process=None):
 
 class Manager:
     def __init__(self, state_dir=None, agy=None, attempt_seconds=None):
-        self.state = Path(state_dir or os.environ.get('GEMINI_DELEGATE_STATE_DIR') or Path.home()/'.local/share/gemini-delegate').resolve()
+        self.state = Path(state_dir or default_state_dir()).resolve()
         self.state.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.state.chmod(0o700)
-        self.agy = agy or os.environ.get('GEMINI_DELEGATE_AGY') or shutil.which('agy') or str(Path.home()/'.local/bin/agy')
+        self.agy = agy or os.environ.get('GEMINI_DELEGATE_AGY') or find_program(None,'agy') or 'agy'
         self.attempt_seconds = attempt_seconds
         self.jobs = {}
         self.lock = threading.RLock()
@@ -423,17 +432,15 @@ class Manager:
     @contextlib.contextmanager
     def _agy_slot(self, job, deadline):
         # MCP processes in different chats share this lock, not just one pool.
-        with (self.state/'agy.lock').open('a') as lock:
-            os.chmod(lock.name,0o600)
+        with FileLock(self.state/'agy.lock') as lock:
             while True:
                 if job['cancel'].is_set():
                     raise WorkerError('cancelled','Task cancelled while waiting for AGY')
                 if time.monotonic()>=deadline:
                     raise WorkerError('timeout','Task deadline reached while waiting for AGY')
-                try:
-                    fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+                if lock.acquire():
                     break
-                except BlockingIOError:
+                else:
                     if job['status'] != 'waiting_for_agy':
                         self._set_status(job, 'waiting_for_agy')
                     job['cancel'].wait(.2)
@@ -442,7 +449,7 @@ class Manager:
                 self._set_status(job, 'running')
                 yield
             finally:
-                fcntl.flock(lock,fcntl.LOCK_UN)
+                lock.release()
 
     def submit(self, args):
         instruction = args.get('instruction', '').strip()
@@ -473,7 +480,7 @@ class Manager:
         root.mkdir(parents=True, mode=0o700)
         agent = root/'.agents/agents'
         agent.mkdir(parents=True)
-        (agent/'gemini-delegate-worker.md').write_text(AGENT)
+        (agent/'gemini-delegate-worker.md').write_text(AGENT, encoding='utf-8')
         files = []
         for name in args.get('input_files', []):
             path = Path(name).expanduser()
@@ -683,7 +690,7 @@ class Manager:
                 raise WorkerError('unknown_task','Unknown task')
             metadata = self.state/'jobs'/jid/'metadata.json'
             if metadata.is_file():
-                return json.loads(metadata.read_text())
+                return json.loads(metadata.read_text(encoding='utf-8'))
             raise WorkerError('unknown_task','Unknown task')
         if wait_seconds:
             job['done'].wait(min(20,max(0,wait_seconds)))
@@ -694,7 +701,7 @@ class Manager:
         if not job and re.fullmatch(r'[0-9a-f]{16}',jid):
             metadata = self.state/'jobs'/jid/'metadata.json'
             if metadata.is_file():
-                job = json.loads(metadata.read_text())
+                job = json.loads(metadata.read_text(encoding='utf-8'))
         if not job:
             raise WorkerError('unknown_task','Unknown task')
         if job['status'] not in ('completed','failed','cancelled'):
@@ -708,7 +715,7 @@ class Manager:
         if not job and re.fullmatch(r'[0-9a-f]{16}',jid):
             metadata = self.state/'jobs'/jid/'metadata.json'
             if metadata.is_file():
-                job = json.loads(metadata.read_text())
+                job = json.loads(metadata.read_text(encoding='utf-8'))
                 job['root'] = str(metadata.parent)
         if not job or job['status']!='completed' or not job['changes']:
             raise WorkerError('invalid_changes','Task has no completed staged changes')

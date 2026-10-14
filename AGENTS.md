@@ -37,14 +37,19 @@ cd gemini-delegate
 
 环境要求：
 
-- macOS 或 Linux、Python 3.9+、Git、Codex CLI、官方 Antigravity CLI（`agy`）。
-- macOS 已实际调用验证；Linux 有 CI，尚未做真实账号推理验证；Windows 暂不支持。
+- macOS、Linux 或 Windows 10/11，Python 3.9+、Git、Codex CLI、官方 Antigravity CLI（`agy`）。
+- macOS 已实际调用验证；Linux 有 CI；Windows 为预览支持，真实账号推理仍需手测。
 - 使用安装者自己的 Google 账号；会员身份本身不保证能访问指定 AGY 模型。
 - 默认且固定模型为 `gemini-3.8-flash-high`。不共享作者账号、不降级模型、不改用付费 API。
 
 若缺少 Python、Git 或 Codex，按用户的正常包管理方式或厂商官方说明补齐必要依赖。
 若缺少 AGY，先查看 [官方 CLI 文档](https://antigravity.google/docs/cli/)，确认适合当前系统的安装方式。
 不要使用不明来源的同名程序，也不要下载其他项目的 AGY 替代品。
+
+Windows 使用 PowerShell，下面的 `python3` 命令改为 `py -3`；没有 Python launcher 时
+使用已确认的 `python`。先阅读 [Windows 验收指南](docs/WINDOWS.md)。原生 `.exe` 和
+npm Node `.cmd` 入口受支持；任意批处理包装不直接执行，需指定官方可执行文件。
+不要混用 WSL 的 CLI 与 Windows Python。若官方 AGY 不提供适用入口，报告依赖卡点。
 
 ## 2. 检查依赖和账号
 

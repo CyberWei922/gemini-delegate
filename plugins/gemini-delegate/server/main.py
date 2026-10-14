@@ -3,6 +3,7 @@
 import json
 import sys
 from worker import Manager, WorkerError, VERSION
+from host_tools import configure_stdio
 
 OBJECT = {'type':'object'}
 TASK_SCHEMA = {'type':'object','properties':{
@@ -62,6 +63,7 @@ def call(manager, name, args):
 
 
 def serve():
+    configure_stdio()
     manager = Manager()
     try:
         for raw in sys.stdin.buffer:
