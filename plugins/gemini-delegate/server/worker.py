@@ -19,7 +19,8 @@ import urllib.parse
 import urllib.request
 import uuid
 from host_tools import atomic_replace, FileLock, default_state_dir, find_program, managed_process, stop_process
-from native_session import prepare_agent, rename_conversation
+from native_session import prepare_agent
+from title_jobs import schedule_title, merge_title
 
 MODEL = 'gemini-3.8-flash-high'
 VERSION = json.loads((Path(__file__).resolve().parents[1] / 'plugin.json').read_text(encoding='utf-8'))['version']
@@ -28,10 +29,11 @@ MAX_FILE = 128 * 1024
 MAX_OUTPUT = 2 * 1024 * 1024
 INPUT_CHUNK_BYTES = 24 * 1024
 MIN_ATTEMPT_SECONDS = 5
-DEFAULT_TIMEOUT_SECONDS = 300
+DEFAULT_TIMEOUT_SECONDS = 40
 DEFAULT_MAX_ATTEMPTS = 3
-DEFAULT_ATTEMPT_SECONDS = 60
-RETRYABLE_CODES = ('timeout','empty_result','invalid_result','invalid_envelope','transient_error')
+DEFAULT_ATTEMPT_SECONDS = 25
+STARTUP_RETRY_WINDOW_SECONDS = 15
+RETRYABLE_CODES = ('timeout','transient_error')
 DNS_CACHE = {}
 AGENT = '''---
 name: gemini-delegate-worker
@@ -179,13 +181,25 @@ def validate_schema(value, schema, path='$'):
 def agy_failure(message):
     """Classify actual CLI failures, never the contents of a successful answer."""
     text = str(message)
+    phase=('processing' if re.search(r'streamGenerateContent|generation|inference',text,re.I) else
+           'startup' if re.search(r'Eligibility check failed|failed to (?:get|read) profile picture',text,re.I) else 'unknown')
+    details={'reported_phase':phase}
     if re.search(r'\b(?:401|403|429)\b|unauthori[sz]ed|invalid.grant|authentication|not authenticated|sign.in required|log.in required|permission denied|access denied|quota|resource.exhausted|rate.limit|billing|insufficient credits',text,re.I):
-        return WorkerError('agy_failed',text[:800])
+        return WorkerError('agy_failed',text[:800],details)
     if re.search(r'print timeout|deadline exceeded|timed? out|timeout',text,re.I):
-        return WorkerError('timeout','AGY request timed out')
+        return WorkerError('timeout','AGY request timed out',details)
     if re.search(r'\bEOF\b|connection (?:reset|refused|closed)|broken pipe|temporary failure|temporarily unavailable|service unavailable|\b(?:502|503|504)\b|network is unreachable',text,re.I):
-        return WorkerError('transient_error','AGY reported a temporary network or service failure')
-    return WorkerError('agy_failed',text[:800] or 'AGY did not complete')
+        return WorkerError('transient_error','AGY reported a temporary network or service failure',details)
+    return WorkerError('agy_failed',text[:800] or 'AGY did not complete',details)
+
+
+def failure_phase(attempt, error):
+    """Require positive preflight evidence; silence alone is not startup."""
+    usage=attempt.get('usage') or {}
+    if (attempt.get('agy_conversation_id') or attempt.get('agy_session_id') or
+        attempt.get('response_observed') or any(isinstance(v,(int,float)) and not isinstance(v,bool) and v>0 for v in usage.values())):
+        return 'processing'
+    return error.details.get('reported_phase','unknown')
 
 
 def decode_result(stdout, stderr, returncode, response_type='text', schema=None):
@@ -580,7 +594,9 @@ class Manager:
                'project_name': project_name, 'context_mode': 'independent', 'plugin_version': VERSION,
                'agy_working_directory': str(workspace),
                'retry_policy':{'max_attempts':max_attempts,'total_timeout_seconds':timeout,
-                               'initial_timeout_seconds':cap or self.attempt_seconds,
+                               'initial_timeout_seconds':cap or self.attempt_seconds or DEFAULT_ATTEMPT_SECONDS,
+                               'only_confirmed_startup_failures':True,
+                               'startup_retry_window_seconds':STARTUP_RETRY_WINDOW_SECONDS,
                                'retryable_codes':list(RETRYABLE_CODES)},
                'status': 'queued', 'model': MODEL, 'created_at': time.time(),
                'root': str(root), 'workspace': str(workspace), 'files': files, 'args': args,
@@ -648,8 +664,9 @@ class Manager:
             # does not rename its native conversation or claim monitor support.
             prompt = '工作名称：'+job['title']+'\n项目名称：'+job['project_name']+'\n'+prompt
             cap = args.get('attempt_timeout_seconds', self.attempt_seconds)
+            if cap is None:
+                cap = DEFAULT_ATTEMPT_SECONDS
             max_attempts = args.get('max_attempts', DEFAULT_MAX_ATTEMPTS)
-            previous_timeout_limit = None
             for attempt in range(max_attempts):
                 if job['cancel'].is_set():
                     raise WorkerError('cancelled', 'Task cancelled')
@@ -661,23 +678,11 @@ class Manager:
                         remaining = min(execution_budget, deadline-time.monotonic())
                         if remaining < MIN_ATTEMPT_SECONDS:
                             raise WorkerError('timeout', 'Task deadline reached before AGY execution')
-                        if cap is None:
-                            if max_attempts == 1:
-                                cap = remaining
-                            else:
-                                # Reserve backoff, process cleanup and one final
-                                # metadata update instead of spending everything
-                                # on the first call. Explicit caps remain honored.
-                                weights = sum(1+.5*i for i in range(max_attempts))
-                                reserve = 20+2*max_attempts+sum(min(2**i,4) for i in range(max_attempts-1))
-                                cap = min(DEFAULT_ATTEMPT_SECONDS,max(MIN_ATTEMPT_SECONDS,(remaining-reserve)/weights))
-                            job['retry_policy']['initial_timeout_seconds'] = round(cap,2)
-                        limit = min(cap * (1+.5*attempt), remaining)
+                        job['retry_policy']['initial_timeout_seconds'] = round(cap,2)
+                        limit = min(cap, remaining)
                         # Slot waiting must not consume an already-calculated print budget.
                         # The hard process deadline never extends the overall task budget.
                         hard_limit = min(limit+2, remaining)
-                        if previous_timeout_limit is not None and hard_limit <= previous_timeout_limit:
-                            raise WorkerError('timeout', 'Insufficient remaining time for a longer timeout retry')
                         argv = [self.agy, '-p', prompt, '--agent', 'gemini-delegate-worker', '--model', MODEL,
                                 '--output-format', 'json', '--print-timeout', str(max(1,int(limit)))+'s',
                                 '--sandbox', '--disable-slash-commands']
@@ -711,6 +716,7 @@ class Manager:
                                 attempt_info['agy_'+key] = value
                         from accounting import numeric_usage
                         reported = numeric_usage(envelope.get('usage'))
+                        attempt_info['response_observed']=bool(envelope.get('response') or envelope.get('structured_output'))
                         for k,v in reported.items():
                             job['usage'][k] = job['usage'].get(k,0)+v
                         attempt_info['usage'] = reported
@@ -724,7 +730,7 @@ class Manager:
                     job['result'] = data
                     (root/'result.json').write_text(json.dumps(data, ensure_ascii=False, indent=2),encoding='utf-8')
                     (root/'result.json').chmod(0o600)
-                    self._rename_native_conversation(job,attempt_info,deadline)
+                    self._schedule_native_title(job,attempt_info)
                     attempt_info['native_title'] = job.get('native_title')
                     self._set_status(job, 'completed')
                     break
@@ -733,21 +739,18 @@ class Manager:
                         raise
                     attempt_info.update(status='failed',error_code=e.code)
                     attempt_info['error_details'] = e.details
-                    if e.code not in RETRYABLE_CODES or attempt+1>=max_attempts:
-                        self._rename_native_conversation(job,attempt_info,deadline)
-                        attempt_info['native_title'] = job.get('native_title')
+                    phase=failure_phase(attempt_info,e)
+                    attempt_info['failure_phase']=phase
+                    startup_retry=(phase=='startup' and e.code in ('transient_error','timeout') and
+                                   attempt_info['elapsed_seconds']<=STARTUP_RETRY_WINDOW_SECONDS)
+                    attempt_info['retry_eligible']=startup_retry
+                    attempt_info['native_title']={'status':'skipped','reason':'Failed work is discarded without metadata delay'}
+                    if not startup_retry or attempt+1>=max_attempts:
                         raise
                     remaining = deadline-time.monotonic()
-                    delay = min(2**attempt,4)
-                    next_limit = min(cap*(1+.5*(attempt+1)), remaining-delay)
+                    delay = min(.25*(2**attempt),1)
                     if remaining-delay < MIN_ATTEMPT_SECONDS:
                         raise
-                    next_hard_limit = min(next_limit+2, remaining-delay)
-                    if e.code == 'timeout' and next_hard_limit <= hard_limit:
-                        # Do not restart the same task with an equal/shorter deadline.
-                        raise
-                    if e.code == 'timeout':
-                        previous_timeout_limit = hard_limit
                     # Naming failed attempts must not consume the retry budget.
                     # Keep their native IDs and an explicit outcome in records.
                     attempt_info['native_title'] = {'status':'skipped','reason':'Model retry takes priority over failed-attempt naming'}
@@ -756,8 +759,6 @@ class Manager:
                     self._set_status(job, 'retrying')
                     if self._retry_backoff(job,delay):
                         raise WorkerError('cancelled','Task cancelled during retry backoff')
-                    feedback = str(e)[:300] if e.code != 'timeout' else 'The previous attempt timed out. The next attempt has a larger budget; keep the result concise.'
-                    prompt += '\nPrevious attempt failed validation ('+e.code+'): '+feedback+' Answer the same bounded task directly and completely; do not execute commands.'
             else:
                 raise WorkerError('invalid_result', 'No validated result')
         except WorkerError as e:
@@ -776,12 +777,20 @@ class Manager:
             job['retry_policy'].pop('next_attempt',None)
             if job['status']=='failed':
                 code=job.get('error',{}).get('code')
+                last=job['attempts'][-1] if job['attempts'] else {}
                 reason = ('non_retryable_error' if code not in RETRYABLE_CODES else
+                          'time_budget_exhausted' if time.monotonic()>=deadline else
+                          'mid_task_failure' if last.get('failure_phase')=='processing' else
+                          'startup_not_confirmed' if last.get('failure_phase')=='unknown' else
+                          'non_retryable_error' if not last.get('retry_eligible',True) or code not in RETRYABLE_CODES else
                           'attempts_exhausted' if len(job['attempts'])>=job['retry_policy']['max_attempts'] else
                           'time_budget_exhausted')
                 job['handoff']={'ready':True,'target':'primary_agent','reason':reason,
+                                'discard_result':True,
                                 'attempt_count':len(job['attempts']),
                                 'instruction':'Automatic Gemini attempts have stopped. The primary agent should complete permitted work from the original task, or explain any login, quota or permission blocker. Do not resubmit this same failed task automatically.'}
+                job['result']=None
+                job['changes']=[]
             job['elapsed_seconds'] = round(time.monotonic()-started,2)
             job['finished_at'] = time.time()
             # Retain result/artifacts, not potentially sensitive prompt or original file contents.
@@ -802,28 +811,16 @@ class Manager:
             finally:
                 job['done'].set()
 
-    def _rename_native_conversation(self, job, attempt, deadline):
-        conversation = attempt.get('agy_conversation_id')
+    def _schedule_native_title(self,job,attempt):
+        conversation=attempt.get('agy_conversation_id')
         if not conversation:
-            job['native_title'] = {'status':'unavailable','reason':'AGY did not return a conversation ID'}
+            job['native_title']={'status':'unavailable','reason':'AGY did not return a conversation ID'}
             return
-        remaining = deadline-time.monotonic()
-        if remaining < 1 or job['cancel'].is_set():
-            job['native_title'] = {'status':'skipped','reason':'Task cancelled or execution budget exhausted'}
-            return
-        # /rename requires a ready interactive conversation manager in AGY
-        # 1.3.5. Never send it through -p or --prompt-interactive to the model.
         try:
-            with self._agy_slot(job,deadline):
-                remaining = deadline-time.monotonic()
-                if remaining <= 0:
-                    raise WorkerError('timeout','No time left for native title update')
-                job['native_title'] = rename_conversation(self.agy,Path(job['workspace']),conversation,
-                    job['title'],min(20,remaining),job['cancel'],lambda p:job.update(proc=p))
-        except (WorkerError,OSError):
-            job['native_title'] = {'status':'failed','title':job['title'],'conversation_id':conversation}
-        finally:
-            job['proc'] = None
+            job['native_title']=schedule_title(job['root'],self.agy,job['workspace'],conversation,job['title'])
+        except Exception as error:
+            job['native_title']={'status':'failed','reason':'Native metadata scheduling failed',
+                                 'error_type':type(error).__name__}
 
     def _stage_changes(self, job, data):
         originals = {f['path']:f for f in job['files']}
@@ -850,11 +847,12 @@ class Manager:
                 raise WorkerError('unknown_task','Unknown task')
             metadata = self.state/'jobs'/jid/'metadata.json'
             if metadata.is_file():
-                return json.loads(metadata.read_text(encoding='utf-8'))
+                return merge_title(metadata.parent,json.loads(metadata.read_text(encoding='utf-8')))
             raise WorkerError('unknown_task','Unknown task')
         if wait_seconds:
             job['done'].wait(min(20,max(0,wait_seconds)))
-        return {k:job[k] for k in ('id','title','display_name','project_name','context_mode','plugin_version','agy_working_directory','native_title','retry_policy','handoff','status','model','created_at','started_at','agy_started_at','agy_slot','finished_at','workspace','attempts','elapsed_seconds','input_parts','usage','result','changes','error','applied_at') if k in job} | {'sources':[{k:v for k,v in s.items()if k!='text'}for s in job['sources']]}
+        data={k:job[k] for k in ('id','title','display_name','project_name','context_mode','plugin_version','agy_working_directory','native_title','retry_policy','handoff','status','model','created_at','started_at','agy_started_at','agy_slot','finished_at','workspace','attempts','elapsed_seconds','input_parts','usage','result','changes','error','applied_at') if k in job} | {'sources':[{k:v for k,v in s.items()if k!='text'}for s in job['sources']]}
+        return merge_title(job['root'],data)
 
     def cancel(self,jid):
         job = self.jobs.get(jid)
@@ -927,9 +925,9 @@ class Manager:
     def status(self):
         return {'plugin_version':VERSION,'model':MODEL,'agy':self.agy,'agy_available':Path(self.agy).is_file(),
                 'max_concurrent_agy_calls':self.max_concurrency,'context_mode':'independent',
-                'default_retry_policy':{'max_attempts':DEFAULT_MAX_ATTEMPTS,'total_timeout_seconds':DEFAULT_TIMEOUT_SECONDS,'initial_timeout_seconds':DEFAULT_ATTEMPT_SECONDS,'retryable_codes':list(RETRYABLE_CODES)},
+                'default_retry_policy':{'max_attempts':DEFAULT_MAX_ATTEMPTS,'total_timeout_seconds':DEFAULT_TIMEOUT_SECONDS,'initial_timeout_seconds':DEFAULT_ATTEMPT_SECONDS,'retryable_codes':list(RETRYABLE_CODES),'only_confirmed_startup_failures':True,'startup_retry_window_seconds':STARTUP_RETRY_WINDOW_SECONDS},
                 'conversation_workspace_policy':'AGY starts in the real project workspace; AGY manages native conversation storage',
-                'native_title_policy':'Official interactive /rename on macOS/Linux; Windows interactive transport unavailable',
+                'native_title_policy':'Background official /rename after result delivery, independent metadata lock; Windows transport unavailable',
                 'concurrency_scope':'Shared state directory; use one runtime generation per directory',
                 'web_policy':'Read-only public URLs supplied by the primary agent; no browser automation or global permission grants',
                 'mutation_policy':'Explicit files only; staged replacements require primary-agent application and matching original hashes',

@@ -3,7 +3,7 @@
 <p align="center">让 Gemini High 处理简单任务，让 GPT 专注规划、判断和复核。</p>
 
 <p align="center">
-  <a href="https://github.com/CyberWei922/gemini-delegate/releases"><img src="https://img.shields.io/badge/Version-1.5.0-007EC6?style=flat-square" alt="版本 1.5.0"></a>
+  <a href="https://github.com/CyberWei922/gemini-delegate/releases"><img src="https://img.shields.io/badge/Version-1.6.0-007EC6?style=flat-square" alt="版本 1.6.0"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-007EC6?style=flat-square" alt="MIT 开源协议"></a>
   <a href="AGENTS.md"><img src="https://img.shields.io/badge/Python-3.9%2B-3776AB?style=flat-square" alt="Python 3.9 及以上"></a>
   <a href="docs/VERIFICATION.md"><img src="https://img.shields.io/badge/macOS-CI%20passed-111827?style=flat-square" alt="macOS 回归测试通过，历史版本已实际调用验证"></a>
@@ -20,9 +20,9 @@
 通过本机官方 Antigravity CLI（AGY），使用你自己的 Google 账号和模型额度。
 独立社区项目，由 CyberWei922 发起、AI 辅助开发，不隶属于 Google 或 OpenAI。
 
-1.5.0 默认双任务并发，按项目汇总用量，并记录中文任务名称。
+1.6.0 默认双任务并发，按项目汇总用量，并记录中文任务名称。
 AGY 在当前项目中启动，并使用官方交互命令设置原生中文会话名（macOS 已实测；Windows 自动改名待适配）。
-超时或临时失败默认自动尝试最多 3 次，再由 GPT 接手，见[重试说明](docs/RETRIES.md)。
+启动时的短暂连接失败最多尝试 3 次；处理中断直接作废并交回 GPT。默认单次 25 秒、总预算 40 秒，见[重试说明](docs/RETRIES.md)。
 可显式切回单任务执行，使用方式与限制见[并发与用量说明](docs/CONCURRENCY.md)。
 
 ## 把链接交给 Codex 安装

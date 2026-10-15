@@ -142,7 +142,7 @@ codex plugin list --json
 调用前说明：“我会使用 Gemini Delegate 插件，让 Gemini High 做一次连接检查。”
 通过 MCP 提交一个简短任务：只返回 `{ "check": "GEMINI_OK" }`，并用 JSON schema
 要求这个准确值。传入真实项目的 `workspace`、中文标题 `Gemini 安装连接检查`、
-180 秒期限，随后以每次最多 20 秒的等待读取异步结果。
+默认 40 秒总期限，随后以每次最多 20 秒的等待读取异步结果。
 
 验收要求：
 
@@ -160,7 +160,7 @@ python3 scripts/smoke.py
 需要确认较大文件分块读取时，再运行：
 
 ```sh
-python3 scripts/smoke.py --file-task --workspace . --timeout 300
+python3 scripts/smoke.py --file-task --workspace . --timeout 180 --attempt-timeout 150
 ```
 
 当前会话没加载 MCP 工具时，使用安装目录中的
@@ -181,12 +181,15 @@ python3 scripts/smoke.py --file-task --workspace . --timeout 300
 独立工作；依赖 Gemini 结果的步骤要等待并复核。交付时报告真实结果、任务 ID、
 失败与重试，不把排队或失败当成成功。
 
-默认总执行预算 300 秒，可设 15–600 秒，覆盖资料读取、AGY 槽等待、退避和全部尝试。
-默认最多 3 次（首次加 2 次重试），自动安排逐次增加的调用预算；首次上限 60 秒，
-短总时限会相应缩小。可设 `max_attempts: 1–5` 或指定首次 `attempt_timeout_seconds`。
-较多文件可设总时限 600 秒、首次 120 秒；总期限用尽或无法安排更长超时重试时提前停止。
-`retrying` 期间继续等待，不让 GPT 重做同一任务；最终失败读取 `handoff`，再由主智能体接手。
-登录、权限、额度错误不盲重试；详见[自动重试说明](docs/RETRIES.md)。
+默认总执行预算 40 秒，单次调用上限 25 秒，不逐次延长；读取、AGY 槽等待、退避和全部尝试共用期限。
+仅确认在启动阶段、15 秒内发生的临时连接失败自动重试，最多 3 次（首次加 2 次）。
+一旦已有响应、用量或会话进展，或者不能确认尚未开始，就直接作废并交回主智能体。
+空结果、格式错误、处理中超时和登录／权限／额度错误不重放。
+`max_attempts` 可设 1–5；较大后台任务确有需要时显式调整 `timeout_seconds` 和
+`attempt_timeout_seconds`，不要给简单任务自动增加到数分钟。详见[重试说明](docs/RETRIES.md)。
+`retrying` 期间等待同一 ID；最终失败读取 `handoff`，再由主智能体接手。
+成功结果立即返回；中文会话改名在独立后台元数据进程中处理，不占模型并发槽、不增加模型问答。
+不要等待改名才使用模型结果，只有 `native_title.status: set` 才能报告改名成功。
 
 按真实项目调用 `list_tasks` 查看记录。插件不会把 Gemini 注册成 Codex 原生
 子智能体；不要用 GPT 桥梁或伪造记录模仿。网页看板仅在用户明确要求时打开。

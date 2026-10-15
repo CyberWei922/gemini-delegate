@@ -13,6 +13,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from host_tools import FileLock, atomic_replace, detached_flags, process_alive, read_text
+from title_jobs import merge_title
 
 TERMINAL = {'completed', 'failed', 'cancelled', 'interrupted'}
 CHILDREN = []
@@ -66,7 +67,7 @@ def read_tasks(state, workspace=None, limit=200):
             if path.is_symlink():
                 continue
             try:
-                task = public_task(json.loads(read_text(path)))
+                task = public_task(merge_title(root,json.loads(read_text(path))))
             except (OSError, ValueError, TypeError):
                 continue
             if not workspace or task.get('workspace') == workspace:

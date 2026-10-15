@@ -16,24 +16,23 @@ The worker fixes this High model and invokes AGY with bounded print mode, JSON
 output, sandbox hints and an isolated worker agent. AGY defaults to two
 independent concurrent calls; explicit concurrency 1 selects serial execution. Calls are stopped as a process tree on cancellation/hard timeout (POSIX
 process groups; Windows Job Objects with a gated launcher). A
-recoverable output failure, timeout or recognized temporary network error retries
-automatically (up to three total attempts by default). Timeout retries require a
-strictly longer available process budget. The wrapper rejects soft-denied, empty or
-partial-timeout success envelopes and validates structured results.
+confirmed startup connection failure within 15 seconds can retry, up to three total
+attempts by default. Mid-task interruptions, unconfirmed phases, empty/invalid output
+and account/permission/quota failures stop without replaying generated work.
+Partial results are discarded and terminal failures expose handoff to the primary agent.
+The wrapper rejects soft-denied, empty or partial-timeout success envelopes and
+validates structured results.
 
-The default 300-second total budget includes retrieval, shared-slot waiting,
-backoff and all attempts. Automatic initial caps are up to 60 seconds, scaled
-down for shorter totals; later caps grow by 50% of the initial cap each time.
-`attempt_timeout_seconds` (`--attempt-timeout`) sets an explicit initial cap;
-`max_attempts` (`--max-attempts`) accepts 1–5 total attempts. With one attempt and
-no explicit cap, that call can use the whole remaining budget. The deadline
-never resets; cancellation/process cleanup can add a short grace period.
-Authentication, quota and permission failures stop immediately. Wait while
-status is `retrying`; terminal failures include `handoff` for the primary agent.
-This is an MCP result/instruction, not another automatically spawned GPT model.
-Failed-attempt title updates are skipped while retries remain, so metadata does
-not delay useful work; native IDs and reported usage are retained. See
-[retry behavior and examples](../../docs/RETRIES.md).
+The default total execution budget is 40 seconds and each call is capped at 25 seconds.
+There is no escalating timeout. Retrieval, shared-slot waiting, backoff and all attempts
+share one deadline starting when a queued worker begins execution. Fixed caps are
+rechecked after slot waiting; cancellation/process cleanup can add a short grace period.
+`attempt_timeout_seconds` (`--attempt-timeout`) overrides the fixed call cap;
+`max_attempts` (`--max-attempts`) accepts 1–5 total attempts. Only explicitly bounded
+background work should request longer budgets. Do not auto-resubmit a terminal failure.
+Handoff is an MCP result/instruction, not an automatically spawned GPT agent.
+Failed-attempt titles are skipped; native IDs and reported usage remain for accounting.
+See [retry behavior and examples](../../docs/RETRIES.md).
 
 Optional environment overrides: `GEMINI_DELEGATE_AGY` and
 `GEMINI_DELEGATE_STATE_DIR`; `GEMINI_DELEGATE_MAX_CONCURRENCY` defaults to 2
@@ -99,8 +98,9 @@ definitions are preserved and reported.
 On macOS/Linux, the official TUI is resumed only to type `/rename` after its
 editor is ready, then `/exit`. This changes the native title without a model
 turn. Never send `/rename` via print mode or `--prompt-interactive` in AGY 1.3.5.
-The operation shares concurrency/deadline/cancellation controls and records
-native_title status without re-running model work. Windows native title transport
+Successful model results return before naming completes. A separate bounded metadata
+helper uses its own lock and never holds model execution slots. Read native_title
+status again before claiming the name was set; pending is not success. Windows native title transport
 is explicitly unsupported pending ConPTY implementation; project cwd still works.
 Uninstallation currently retains the global worker definition; remove it only
 after confirming it is unchanged and unused. Native conversations remain owned

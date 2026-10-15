@@ -105,7 +105,7 @@ class RuntimeConfigTests(unittest.TestCase):
         terminal=json.loads(result.stdout.splitlines()[-1])
         self.assertEqual(len(terminal['attempts']),1)
         self.assertEqual(terminal['retry_policy']['max_attempts'],1)
-        self.assertEqual(terminal['handoff']['reason'],'attempts_exhausted')
+        self.assertEqual(terminal['handoff']['reason'],'non_retryable_error')
 
     def test_fresh_mcp_retries_temporary_cli_failures_before_returning_success(self):
         counter=self.root/'calls.txt'
@@ -113,7 +113,7 @@ class RuntimeConfigTests(unittest.TestCase):
 from pathlib import Path
 p=Path(COUNTER);count=int(p.read_text())+1 if p.exists() else 1;p.write_text(str(count))
 if count<3:
- print(json.dumps({'status':'ERROR','error':'stream request: EOF'}))
+ print(json.dumps({'status':'ERROR','error':'Eligibility check failed: userinfo request: EOF'}))
  raise SystemExit(1)
 print(json.dumps({'status':'SUCCESS','response':'{"check":"GEMINI_OK"}'}))
 '''.replace('COUNTER',repr(str(counter))),encoding='utf-8')

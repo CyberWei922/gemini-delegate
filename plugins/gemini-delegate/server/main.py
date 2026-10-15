@@ -16,9 +16,9 @@ TASK_SCHEMA = {'type':'object','properties':{
     'search_query':{'type':'string','description':'Optional public web research query through the existing Agent Reach Exa backend.'},
     'response_type':{'type':'string','enum':['text','json','edit'],'default':'text','description':'edit returns staged replacements of explicit input files; apply after primary review.'},
     'result_schema':{'type':'object','description':'Optional JSON result contract. Supports type/properties/required/additionalProperties/items/minItems/maxItems/enum/const/minimum/maximum/minLength/maxLength/pattern. No $ref or combinators.'},
-    'timeout_seconds':{'type':'integer','minimum':15,'maximum':600,'default':DEFAULT_TIMEOUT_SECONDS,'description':'Total budget for retrieval, shared-slot waiting, backoff and all attempts. Default 300 seconds; retries never reset this deadline.'},
-    'max_attempts':{'type':'integer','minimum':1,'maximum':5,'default':DEFAULT_MAX_ATTEMPTS,'description':'Total Gemini attempts including the first, default 3. Recoverable failures retry automatically; wait for terminal status before primary-agent takeover. Set 1 to disable retries.'},
-    'attempt_timeout_seconds':{'type':'integer','minimum':15,'maximum':600,'description':'Optional initial attempt cap. Automatic initial cap is up to 60 seconds, scaled to fit total budget. Later caps grow by 50% of the initial cap each time. Timeout retries require a strictly longer remaining process budget.'}
+    'timeout_seconds':{'type':'integer','minimum':15,'maximum':600,'default':DEFAULT_TIMEOUT_SECONDS,'description':'Total execution budget, default 40 seconds, including sources, model-slot waiting and startup retries. Background native naming cannot delay result delivery.'},
+    'max_attempts':{'type':'integer','minimum':1,'maximum':5,'default':DEFAULT_MAX_ATTEMPTS,'description':'Total attempts including first, default 3. Only confirmed startup connection failures within 15 seconds retry. Work that started or has unknown phase is discarded and handed back immediately.'},
+    'attempt_timeout_seconds':{'type':'integer','minimum':15,'maximum':600,'description':'Fixed per-call cap, default 25 seconds; never grows on retries. All startup attempts still share the original total deadline. Larger budgets are only for explicitly appropriate independent background work.'}
 },'required':['instruction'],'additionalProperties':False}
 
 TOOLS = [

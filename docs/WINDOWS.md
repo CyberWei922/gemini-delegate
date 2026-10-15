@@ -78,7 +78,7 @@ doctor 支持相同的 CLI 路径参数，并检查版本、必需调用参数�
 需要验证较大中文文件和权限时执行一次：
 
 ```powershell
-py -3 scripts/smoke.py --file-task --workspace . --timeout 300
+py -3 scripts/smoke.py --file-task --workspace . --timeout 180 --attempt-timeout 150
 ```
 
 应该读取全部源文件分块并通过结构校验。若报 `permission_denied`，记录错误代码及拒绝

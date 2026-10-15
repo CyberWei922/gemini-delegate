@@ -91,14 +91,14 @@ worker and evidence trail, not a different model or paid API fallback.
    - Local files: supply `workspace` and explicit `input_files`. The plugin
      reads those files and gives the worker a small manifest with lossless,
      bounded UTF-8 text parts. Keep tasks narrow and request concise output;
-     use 300–600 seconds when several large files must be read in High.
-   - `timeout_seconds` bounds retrieval, shared-slot waiting and all attempts
-     once execution starts. Default 300 seconds, up to three total attempts
-     (first call plus two retries). Automatic caps start at up to 60 seconds and
-     grow by 50% of the initial cap each time; short total budgets scale down.
-     `max_attempts` accepts 1–5 (1 disables retries). Large file tasks can use
-     timeout_seconds 600 and attempt_timeout_seconds 120. All attempts and
-     backoff share the original deadline; timeout retries need a longer budget.
+     split large batches into small independent tasks.
+   - `timeout_seconds` bounds retrieval, shared-slot waiting and all attempts once
+     execution starts: default 40 seconds, fixed per-call cap 25 seconds, no
+     escalating budgets. `max_attempts` accepts 1–5 (default 3; 1 disables retries).
+     Only confirmed transient startup failures within 15 seconds can retry.
+     Mid-task failures and unknown phases stop immediately without replay.
+     Explicitly set both timeout_seconds and attempt_timeout_seconds for genuinely
+     longer background work; do not automatically extend simple tasks to minutes.
    - Research: provide public `web_urls` or `search_query`. The plugin fetches
      public pages through a read-only adapter. Search uses the user's existing
      Agent Reach/Exa backend. It neither changes global AGY web permissions nor
@@ -147,22 +147,25 @@ AGY 1.3.5 print-mode /rename is unavailable and --prompt-interactive
 Token Monitor display/refresh still requires actual observation.
 Never change other chats' concurrency or reload them to run a local trial.
 
-The worker automatically retries timeouts, empty/invalid output and recognized
-temporary network failures, up to max_attempts and the original total deadline.
-Do not take over after an individual failed attempt, cancel a retrying task, or
-submit a duplicate while its status is retrying/running/waiting_for_agy. Continue
-independent work and poll the same ID with waits up to 20 seconds. Once terminal
-failed with handoff.ready, complete the original permitted work in the primary
-agent; do not start another retry cycle automatically. Cancellation is not a
-handoff. Explain any account/permission blocker without bypassing it.
+The worker retries only recognized temporary connection failures confirmed to be
+in startup and returned within 15 seconds. Default limits are three total attempts,
+25 seconds per call, 40 seconds overall; backoff is 0.25 then 0.5 seconds and releases
+model slots. Silence is not evidence that model work has not started: AGY JSON mode
+may buffer until completion. If there is response/usage/session evidence, or the
+phase cannot be confirmed, discard the failed work and hand off without replay.
+Empty results, schema errors and mid-task timeouts do not trigger automatic retries.
+Do not cancel a retrying task or submit a duplicate while its status is
+retrying/running/waiting_for_agy. Continue independent work and poll the same ID
+with waits up to 20 seconds. On terminal failed with handoff.ready, complete the
+original permitted work in the primary agent; do not begin another retry cycle.
+Cancellation is not a handoff. Failed partial output is not an approved result;
+native IDs and reported/unknown usage remain for accounting.
 
-Attempts keep independent fresh prompts, process-tree cleanup and output
-validation. Retry caps grow and are rechecked after shared-slot waiting; backoff
-releases slots and is cancellable. Failed-attempt native-title updates are
-skipped while retrying to save time, but native IDs and reported usage remain.
-Validation feedback identifies the specific error. Do not downgrade the model,
-claim partial/denied output succeeded, or count missing attempt usage as zero.
-Cancel only work that is no longer needed using cancel_task.
+Valid model results return immediately. Native /rename runs in a bounded background
+metadata helper with its own lock and no model execution slot or new model turn.
+Do not delay integration waiting for native_title pending. Later queries merge the
+actual rename outcome; only status set proves success. Naming failure must never
+replay model work. Cancel only work that is no longer needed using cancel_task.
 
 If authentication, quota, search connectivity or a permission fails, identify the
 actual failure. Continue the bounded task in GPT when appropriate; do not spin

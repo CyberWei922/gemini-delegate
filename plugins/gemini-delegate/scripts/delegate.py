@@ -29,7 +29,7 @@ def run():
     parser.add_argument('--input', help='JSON file containing delegate_task arguments')
     parser.add_argument('--timeout', type=int, default=DEFAULT_TIMEOUT_SECONDS)
     parser.add_argument('--max-attempts',type=int,choices=range(1,6),help='Total attempts including the first; default 3, 1 disables retries')
-    parser.add_argument('--attempt-timeout', type=int, help='Optional initial attempt cap; later caps grow by 50%% of it, within the total deadline')
+    parser.add_argument('--attempt-timeout', type=int, help='Fixed per-call cap, default 25 seconds; only confirmed startup failures retry')
     parser.add_argument('--agy', help='Override the installed official AGY path')
     parser.add_argument('--state-dir', type=Path, help='Override the installed task directory')
     args = parser.parse_args()

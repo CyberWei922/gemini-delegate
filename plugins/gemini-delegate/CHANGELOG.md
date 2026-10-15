@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.6.0 — 2026-10-15
+
+- Default to a 25-second fixed call cap and 40-second total execution budget.
+- Retry only confirmed transient startup failures returned within 15 seconds, up to three total attempts. Discard mid-task/unknown-phase failures without replay.
+- Stop on empty/invalid output and account/permission/quota errors. Retain failure evidence and reported/unknown usage; never apply failed partial output.
+- Return valid results before bounded background official native naming, with a separate metadata lock, no model execution slot and no new model turn.
+- Verification scope and live calls are recorded in the repository's docs/VERIFICATION.md.
+
 ## 1.5.0 — 2026-10-15
 
 - Retry recoverable Gemini failures automatically: three total attempts by default, bounded by one 300-second deadline and growing 60/90/120-second call caps.

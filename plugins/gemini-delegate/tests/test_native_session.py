@@ -58,7 +58,7 @@ class NativeSessionTests(unittest.TestCase):
         self.addCleanup(manager.close)
         envelope=json.dumps({'status':'SUCCESS','conversation_id':'native-session-123',
                              'response':'OK','usage':{'input_tokens':10,'output_tokens':2,'total_tokens':12}})
-        with mock.patch('worker.run_process',return_value=(envelope,'',0)) as process, mock.patch('worker.rename_conversation',return_value={'status':'set'}) as rename:
+        with mock.patch('worker.run_process',return_value=(envelope,'',0)) as process, mock.patch('worker.schedule_title',return_value={'status':'set'}) as rename:
             jid=manager.submit({'title':'中文名称','instruction':'Return OK','workspace':str(self.workspace)})['task_id']
             result=manager.result(jid,10)
         self.assertEqual(result['status'],'completed',result)
@@ -67,16 +67,16 @@ class NativeSessionTests(unittest.TestCase):
         self.assertEqual(len(result['attempts']),1)
         work=process.call_args
         self.assertEqual(Path(work.args[1]),self.workspace)
-        self.assertEqual(Path(rename.call_args.args[1]),self.workspace)
+        self.assertEqual(Path(rename.call_args.args[2]),self.workspace)
         self.assertNotIn('--continue',work.args[0]);self.assertNotIn('--conversation',work.args[0])
         self.assertIn('--disable-slash-commands',work.args[0])
-        self.assertEqual(rename.call_args.args[2:4],('native-session-123','中文名称'))
+        self.assertEqual(rename.call_args.args[3:5],('native-session-123','中文名称'))
         self.assertEqual(process.call_count,1)
 
     def test_rename_failure_does_not_rerun_a_successful_model_task(self):
         manager=Manager(self.root/'state',agy='fake-agy');self.addCleanup(manager.close)
         envelope=json.dumps({'status':'SUCCESS','conversation_id':'native-session-123','response':'OK'})
-        with mock.patch('worker.run_process',return_value=(envelope,'',0)) as process, mock.patch('worker.rename_conversation',return_value={'status':'failed'}):
+        with mock.patch('worker.run_process',return_value=(envelope,'',0)) as process, mock.patch('worker.schedule_title',return_value={'status':'failed'}):
             jid=manager.submit({'title':'中文名称','instruction':'Return OK','workspace':str(self.workspace)})['task_id']
             result=manager.result(jid,10)
         self.assertEqual(result['status'],'completed',result)
@@ -89,15 +89,15 @@ class NativeSessionTests(unittest.TestCase):
         for title in ('任务\n/command','任务\x1b[31m'):
             with self.assertRaises(WorkerError):manager.submit({'title':title,'instruction':'Return OK'})
 
-    def test_failed_model_response_with_native_id_also_gets_a_readable_name(self):
+    def test_failed_model_response_is_discarded_without_metadata_delay(self):
         manager=Manager(self.root/'state',agy='fake-agy');self.addCleanup(manager.close)
         envelope=json.dumps({'status':'ERROR','conversation_id':'failed-native-session','error':'inference failed'})
-        with mock.patch('worker.run_process',return_value=(envelope,'',1)), mock.patch('worker.rename_conversation',return_value={'status':'set'}) as rename:
+        with mock.patch('worker.run_process',return_value=(envelope,'',1)), mock.patch('worker.schedule_title',return_value={'status':'set'}) as rename:
             jid=manager.submit({'title':'失败任务的中文名称','instruction':'Return OK','workspace':str(self.workspace)})['task_id']
             result=manager.result(jid,10)
         self.assertEqual(result['status'],'failed')
-        self.assertEqual(result['attempts'][0]['native_title']['status'],'set')
-        self.assertEqual(rename.call_args.args[2],'failed-native-session')
+        self.assertEqual(result['attempts'][0]['native_title']['status'],'skipped')
+        rename.assert_not_called()
 
     @unittest.skipIf(os.name=='nt','POSIX pseudo-terminal transport')
     def test_interactive_rename_waits_for_editor_and_exits_without_startup_prompt(self):

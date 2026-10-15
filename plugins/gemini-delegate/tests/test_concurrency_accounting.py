@@ -189,7 +189,7 @@ print(json.dumps({'status':'SUCCESS','response':'OK','conversation_id':str(uuid.
 sys.path.insert(0,SERVER)
 import worker
 worker.prepare_agent=lambda *args: None
-worker.rename_conversation=lambda *args: {'status':'set'}
+worker.schedule_title=lambda *args: {'status':'pending'}
 from worker import Manager
 m=Manager(STATE,AGY,max_concurrency=2)
 try:

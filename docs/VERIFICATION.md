@@ -1,4 +1,57 @@
-# Release verification 1.5.0
+# Release verification 1.6.0
+
+Date: 2026-10-15. Only quick, positively identified startup connection failures
+are retried; mid-task and unknown-phase failures are discarded without replay.
+
+## Local automated verification
+
+- 111 runtime tests passed on macOS, with 4 Windows-specific skips; 14 installer/
+  protocol tests passed. Tests cover fixed short caps, three-startup-failure limits,
+  generation EOF/partial output, unknown hard timeouts, slow startup, account and
+  permission errors, cancellation, slot release, independent contexts and usage.
+- Background native naming tests prove valid results and client shutdown return
+  before a delayed TUI, that naming holds no model execution slot, that sidecars
+  merge only matching task/session identities, and that lost helpers do not leave
+  pending forever or invalidate completed model work.
+- Public and installed Codex Skill frontmatter validated with Skill Creator.
+  These tests do not establish factual correctness of arbitrary Gemini output.
+
+## Actual official AGY High checks
+
+- Installed Codex compatibility client task `54860faa73b04f7c`: two controlled
+  preflight EOF envelopes were injected locally, followed by one real official
+  `gemini-3.8-flash-high` invocation. The two injected failures were not Google
+  service failures or model calls. The third attempt matched an exact fresh nonce
+  contract; total task execution 16.13 seconds, real call 15.37 seconds,
+  7,297 reported tokens. All three caps were 25 seconds; backoff 0.25/0.5 seconds.
+- Installed OpenCode bundle through a fresh MCP client: eight tools discovered,
+  runtime 1.6.0, task `e8a10681dcc8426b`, exact `GEMINI_OK` result in one attempt,
+  14.28 seconds, 7,215 reported tokens. No failure or retry.
+- Both returned results with native naming still pending. The background helper
+  subsequently reported requires_trust for this source workspace; it did not
+  approve the project's permissions and did not repeat model inference. Chinese
+  metadata dispatch is tested, not claimed to have renamed these native sessions.
+- Reported thinking/cache fields are not added again to total tokens. Missing
+  usage from injected failures remains unknown, not asserted zero.
+
+## Installed-host and platform scope
+
+- Codex and OpenCode runtime copies updated with configuration/personal Skill
+  adaptations retained. Codex official plugin registration reports 1.6.0;
+  OpenCode's official configuration reload completed.
+- The current Codex chat's existing native MCP still reports 1.4.1. New installed
+  compatibility calls work; this does not prove native hot reload. Other chats
+  are not terminated or replaced to refresh old stdio workers.
+- New native naming remains unsupported on Windows; no Windows membership live
+  call was made for this release. Cross-platform CI results belong to the actual
+  commit's Actions run and must be checked separately before release.
+- Private test reports, inputs, account settings and machine backups stay outside
+  the public repository.
+
+---
+
+## Historical verification — 1.5.0
+
 
 Date: 2026-10-15. The retry policy now reserves time for recovery instead of
 giving the whole default deadline to the first call.
