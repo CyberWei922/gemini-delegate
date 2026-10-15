@@ -1,6 +1,6 @@
 ---
 name: delegate-simple-tasks
-description: Use when day-to-day work has independent routine parts that can run alongside the primary GPT agent: source collection, web research, file/code inventories, text/data transformations, and specified mechanical edits. Announce Gemini Delegate by name, submit asynchronous Gemini 3.8 Flash High work through official AGY, and continue GPT planning and judgment while it runs. High is the fixed default; respect the installing user's explicit budget and privacy preferences.
+description: "Use when day-to-day work has independent routine parts that can run alongside the primary GPT agent: source collection, web research, file/code inventories, text/data transformations, and specified mechanical edits. Announce Gemini Delegate by name, submit asynchronous Gemini 3.8 Flash High work through official AGY, and continue GPT planning and judgment while it runs. High is the fixed default; respect the installing user's explicit budget and privacy preferences."
 ---
 
 # Gemini Delegate
@@ -93,9 +93,12 @@ worker and evidence trail, not a different model or paid API fallback.
      bounded UTF-8 text parts. Keep tasks narrow and request concise output;
      use 300–600 seconds when several large files must be read in High.
    - `timeout_seconds` bounds retrieval, shared-slot waiting and all attempts
-     once execution starts. Default 180 seconds; no hidden per-call 75-second
-     cap. `attempt_timeout_seconds` optionally caps the first call and permits
-     a timeout retry only with a strictly longer remaining call budget.
+     once execution starts. Default 300 seconds, up to three total attempts
+     (first call plus two retries). Automatic caps start at up to 60 seconds and
+     grow by 50% of the initial cap each time; short total budgets scale down.
+     `max_attempts` accepts 1–5 (1 disables retries). Large file tasks can use
+     timeout_seconds 600 and attempt_timeout_seconds 120. All attempts and
+     backoff share the original deadline; timeout retries need a longer budget.
    - Research: provide public `web_urls` or `search_query`. The plugin fetches
      public pages through a read-only adapter. Search uses the user's existing
      Agent Reach/Exa backend. It neither changes global AGY web permissions nor
@@ -144,14 +147,22 @@ AGY 1.3.5 print-mode /rename is unavailable and --prompt-interactive
 Token Monitor display/refresh still requires actual observation.
 Never change other chats' concurrency or reload them to run a local trial.
 
-The wrapper rejects nonzero exits, non-SUCCESS statuses, soft permission denials,
-empty results, partial timeout output, malformed JSON, schema/count mismatches,
-unexpected file paths and stale originals. It uses both an AGY timeout and a hard
-process-group deadline, and permits at most one retry on recoverable output
-failures. Default full-budget timeouts are not blindly retried; an explicitly
-capped first attempt can retry only with a longer budget, rechecked after slot
-waiting. Validation retries include the specific error. No model downgrade occurs. A failed result must not be reported
-as completed work. Cancel unneeded tasks with `cancel_task`.
+The worker automatically retries timeouts, empty/invalid output and recognized
+temporary network failures, up to max_attempts and the original total deadline.
+Do not take over after an individual failed attempt, cancel a retrying task, or
+submit a duplicate while its status is retrying/running/waiting_for_agy. Continue
+independent work and poll the same ID with waits up to 20 seconds. Once terminal
+failed with handoff.ready, complete the original permitted work in the primary
+agent; do not start another retry cycle automatically. Cancellation is not a
+handoff. Explain any account/permission blocker without bypassing it.
+
+Attempts keep independent fresh prompts, process-tree cleanup and output
+validation. Retry caps grow and are rechecked after shared-slot waiting; backoff
+releases slots and is cancellable. Failed-attempt native-title updates are
+skipped while retrying to save time, but native IDs and reported usage remain.
+Validation feedback identifies the specific error. Do not downgrade the model,
+claim partial/denied output succeeded, or count missing attempt usage as zero.
+Cancel only work that is no longer needed using cancel_task.
 
 If authentication, quota, search connectivity or a permission fails, identify the
 actual failure. Continue the bounded task in GPT when appropriate; do not spin

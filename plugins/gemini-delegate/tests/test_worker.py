@@ -163,20 +163,21 @@ class WorkflowTests(unittest.TestCase):
             (self.workspace/'.env').write_text('SECRET=x', encoding='utf-8')
             with self.assertRaises(WorkerError):self.manager.submit({'instruction':'read','workspace':str(self.workspace),'input_files':[filename]})
 
-    def test_bad_output_retries_once_then_fails(self):
+    def test_bad_output_retries_twice_then_hands_back(self):
         self.worker.write_text('#!'+sys.executable+'\nimport json\nprint(json.dumps({"status":"SUCCESS","response":""}))\n', encoding='utf-8')
         jid=self.manager.submit({'instruction':'extract','timeout_seconds':15})['task_id']
         result=self.manager.result(jid,10)
         self.assertEqual(result['status'],'failed')
-        self.assertEqual(len(result['attempts']),2)
+        self.assertEqual(len(result['attempts']),3)
         self.assertEqual(result['error']['code'],'empty_result')
+        self.assertEqual(result['handoff']['reason'],'attempts_exhausted')
 
-    def test_default_attempt_can_use_more_than_75_seconds(self):
+    def test_single_attempt_can_use_more_than_75_seconds(self):
         self.manager.attempt_seconds=None
         envelope=json.dumps({'status':'SUCCESS','response':'OK'})
         # With no elapsed clock tick, (76.013+180)-76.013 rounds above 180.
         with mock.patch('worker.time.monotonic',return_value=76.013), mock.patch('worker.run_process',return_value=(envelope,'',0)) as process:
-            jid=self.manager.submit({'instruction':'Return OK','timeout_seconds':180})['task_id']
+            jid=self.manager.submit({'instruction':'Return OK','timeout_seconds':180,'max_attempts':1})['task_id']
             result=self.manager.result(jid,10)
         self.assertEqual(result['status'],'completed',result)
         self.assertGreater(process.call_args.args[2],175)
@@ -199,10 +200,10 @@ class WorkflowTests(unittest.TestCase):
         self.assertLess(process.call_args.args[2],14.9)
         self.assertLess(result['attempts'][0]['timeout_seconds'],14.9)
 
-    def test_timeout_does_not_retry_the_same_default_budget(self):
+    def test_single_attempt_timeout_does_not_retry(self):
         self.manager.attempt_seconds=None
         with mock.patch('worker.run_process',side_effect=WorkerError('timeout','deadline')) as process:
-            jid=self.manager.submit({'instruction':'Return OK','timeout_seconds':15})['task_id']
+            jid=self.manager.submit({'instruction':'Return OK','timeout_seconds':15,'max_attempts':1})['task_id']
             result=self.manager.result(jid,10)
         self.assertEqual(result['status'],'failed')
         self.assertEqual(result['error']['code'],'timeout')
@@ -217,7 +218,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(result['status'],'completed',result)
         limits=[entry.args[2] for entry in process.call_args_list]
         self.assertAlmostEqual(limits[0],17,places=2)
-        self.assertAlmostEqual(limits[1],32,places=2)
+        self.assertAlmostEqual(limits[1],24.5,places=2)
         self.assertEqual(len(result['attempts']),2)
         self.assertLess(sum(item['elapsed_seconds'] for item in result['attempts']),45)
 
@@ -233,7 +234,7 @@ class WorkflowTests(unittest.TestCase):
             with original_slot(job,deadline):
                 yield
         def timed_out(*args):
-            clock[0]=12
+            clock[0]=8
             raise WorkerError('timeout','deadline')
         with mock.patch('worker.time.monotonic',side_effect=lambda:clock[0]), mock.patch.object(self.manager,'_agy_slot',contended_slot), mock.patch('worker.run_process',side_effect=timed_out) as process:
             jid=self.manager.submit({'instruction':'Return OK','timeout_seconds':30,'attempt_timeout_seconds':15})['task_id']

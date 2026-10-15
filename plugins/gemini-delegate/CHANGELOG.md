@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.5.0 — 2026-10-15
+
+- Retry recoverable Gemini failures automatically: three total attempts by default, bounded by one 300-second deadline and growing 60/90/120-second call caps.
+- Expose max_attempts (1–5), explicit initial caps, cancellable backoff, terminal handoff and per-attempt evidence; never retry account/permission/quota failures blindly.
+- Skip intermediate failed-attempt naming so retries can proceed; retain independent contexts, native IDs and reported/unknown usage.
+- Teach the primary agent to wait on the same retrying task and take over only after automatic recovery stops. Verification scope is in the repository's docs/VERIFICATION.md.
+
 ## 1.4.1 — 2026-10-15
 
 - Publish retained two-task concurrency, native project sessions/Chinese titles and project token accounting with independent model contexts.

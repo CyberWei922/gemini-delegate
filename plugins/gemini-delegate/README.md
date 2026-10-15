@@ -16,16 +16,24 @@ The worker fixes this High model and invokes AGY with bounded print mode, JSON
 output, sandbox hints and an isolated worker agent. AGY defaults to two
 independent concurrent calls; explicit concurrency 1 selects serial execution. Calls are stopped as a process tree on cancellation/hard timeout (POSIX
 process groups; Windows Job Objects with a gated launcher). A
-recoverable output failure may retry once. A timeout retry requires an explicitly
-bounded first attempt and a strictly longer available retry budget. The wrapper rejects soft-denied, empty or
+recoverable output failure, timeout or recognized temporary network error retries
+automatically (up to three total attempts by default). Timeout retries require a
+strictly longer available process budget. The wrapper rejects soft-denied, empty or
 partial-timeout success envelopes and validates structured results.
 
-The default 180-second overall execution budget includes retrieval, shared-slot
-waiting and all attempts after the worker starts. Each call uses the remaining
-budget; there is no hidden 75-second cap. `attempt_timeout_seconds` (CLI:
-`--attempt-timeout`) optionally caps the first call; a retry can use up to twice
-that cap, bounded by the remaining total budget and rechecked after slot waiting.
-Cancellation/process cleanup may take a short additional grace period.
+The default 300-second total budget includes retrieval, shared-slot waiting,
+backoff and all attempts. Automatic initial caps are up to 60 seconds, scaled
+down for shorter totals; later caps grow by 50% of the initial cap each time.
+`attempt_timeout_seconds` (`--attempt-timeout`) sets an explicit initial cap;
+`max_attempts` (`--max-attempts`) accepts 1–5 total attempts. With one attempt and
+no explicit cap, that call can use the whole remaining budget. The deadline
+never resets; cancellation/process cleanup can add a short grace period.
+Authentication, quota and permission failures stop immediately. Wait while
+status is `retrying`; terminal failures include `handoff` for the primary agent.
+This is an MCP result/instruction, not another automatically spawned GPT model.
+Failed-attempt title updates are skipped while retries remain, so metadata does
+not delay useful work; native IDs and reported usage are retained. See
+[retry behavior and examples](../../docs/RETRIES.md).
 
 Optional environment overrides: `GEMINI_DELEGATE_AGY` and
 `GEMINI_DELEGATE_STATE_DIR`; `GEMINI_DELEGATE_MAX_CONCURRENCY` defaults to 2

@@ -1,0 +1,159 @@
+"""Behavioral checks for bounded automatic retries and primary-agent handoff."""
+import contextlib
+import json
+from pathlib import Path
+import sys
+import tempfile
+import threading
+import time
+import unittest
+from unittest import mock
+
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'server'))
+from worker import Manager, WorkerError, decode_result
+from main import call
+
+
+class RetryTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup)
+        self.root=Path(self.tmp.name).resolve()
+        patch=mock.patch('worker.prepare_agent');patch.start();self.addCleanup(patch.stop)
+        self.manager=Manager(self.root/'state',agy='fake-agy')
+        self.addCleanup(self.manager.close)
+        patch=mock.patch.object(self.manager,'_retry_backoff',return_value=False)
+        self.backoff=patch.start();self.addCleanup(patch.stop)
+
+    def task(self,**options):
+        jid=call(self.manager,'delegate_task',{'instruction':'Return OK','workspace':str(self.root),**options})['task_id']
+        return self.manager.result(jid,10)
+
+    def envelope(self,response='OK',**extra):
+        return json.dumps({'status':'SUCCESS','response':response,**extra}),'',0
+
+    def test_two_timeouts_then_success_use_three_growing_budgets_without_handoff(self):
+        with mock.patch('worker.run_process',side_effect=[WorkerError('timeout','deadline'),WorkerError('timeout','deadline'),self.envelope()]) as process:
+            result=self.task()
+        self.assertEqual(result['status'],'completed',result)
+        self.assertEqual([a['status'] for a in result['attempts']],['failed','failed','validated'])
+        self.assertNotIn('handoff',result)
+        budgets=[c.args[2] for c in process.call_args_list]
+        self.assertEqual([round(b) for b in budgets],[62,92,122])
+        self.assertEqual([c.args[1] for c in process.call_args_list],[self.root]*3)
+        for c in process.call_args_list:
+            self.assertNotIn('--continue',c.args[0]);self.assertNotIn('--conversation',c.args[0])
+        self.assertEqual([c.args[1] for c in self.backoff.call_args_list],[1,2])
+
+    def test_exhaustion_stops_at_three_and_survives_reopening_with_unknown_usage(self):
+        with mock.patch('worker.run_process',side_effect=WorkerError('timeout','deadline')) as process:
+            result=self.task(context='PRIVATE INPUT')
+        self.assertEqual(process.call_count,3)
+        self.assertEqual(result['status'],'failed')
+        self.assertEqual(result['handoff']['reason'],'attempts_exhausted')
+        self.assertEqual(result['handoff']['attempt_count'],3)
+        self.assertTrue(result['handoff']['ready'])
+        listing=self.manager.task_list(str(self.root))['tasks'][0]
+        self.assertEqual(listing['handoff'],result['handoff'])
+        self.assertNotIn('PRIVATE INPUT',json.dumps(listing))
+        report=self.manager.usage_summary(str(self.root))['projects'][0]
+        self.assertEqual(report['retry_count'],2)
+        self.assertEqual(report['attempts_without_usage'],3)
+        self.assertFalse(report['usage_complete'])
+        reopened=Manager(self.manager.state,agy='fake-agy')
+        try:self.assertEqual(reopened.result(result['id'])['handoff'],result['handoff'])
+        finally:reopened.close()
+
+    def test_network_eof_then_empty_result_then_success_counts_reported_usage_once(self):
+        usage={'input_tokens':10,'output_tokens':2,'total_tokens':12}
+        failure=(json.dumps({'status':'ERROR','error':'stream request: EOF','usage':usage,'conversation_id':'failed-session'}),'',1)
+        empty=self.envelope('',usage=usage,conversation_id='empty-session')
+        good=self.envelope(usage=usage,conversation_id='good-session')
+        with mock.patch('worker.run_process',side_effect=[failure,empty,good]),mock.patch('worker.rename_conversation',return_value={'status':'set'}) as rename:
+            result=self.task()
+        self.assertEqual(result['status'],'completed',result)
+        self.assertEqual([a.get('error_code') for a in result['attempts']],['transient_error','empty_result',None])
+        self.assertEqual(result['usage']['total_tokens'],36)
+        self.assertEqual(rename.call_count,1)  # failed-attempt naming cannot delay retries
+        self.assertEqual(rename.call_args.args[2],'good-session')
+        self.assertEqual(result['attempts'][0]['native_title']['status'],'skipped')
+        report=self.manager.usage_summary(str(self.root))['projects'][0]
+        self.assertEqual(report['reported_usage']['total_tokens'],36)
+        self.assertEqual(report['attempts_without_usage'],0)
+
+    def test_auth_quota_and_permission_failures_do_not_retry_even_with_eof(self):
+        for message in ('401 unauthenticated EOF','quota exhausted: EOF','permission denied: EOF','429 rate limit: EOF'):
+            with self.subTest(message=message),mock.patch('worker.run_process',return_value=(json.dumps({'status':'ERROR','error':message}),'',1)) as process:
+                result=self.task()
+                self.assertEqual(result['status'],'failed',result)
+                self.assertEqual(process.call_count,1)
+                self.assertEqual(result['handoff']['reason'],'non_retryable_error')
+
+    def test_cancel_during_backoff_does_not_run_another_attempt_or_handoff(self):
+        self.backoff.side_effect=lambda job,seconds:job['cancel'].set() or True
+        with mock.patch('worker.run_process',side_effect=WorkerError('timeout','deadline')) as process:
+            result=self.task()
+        self.assertEqual(result['status'],'cancelled',result)
+        self.assertEqual(process.call_count,1)
+        self.assertNotIn('handoff',result)
+
+    def test_total_deadline_still_wins_over_remaining_attempt_count(self):
+        clock=[0.0]
+        def expired(*args):
+            clock[0]=300
+            raise WorkerError('timeout','deadline')
+        with mock.patch('worker.time.monotonic',side_effect=lambda:clock[0]),mock.patch('worker.run_process',side_effect=expired) as process:
+            result=self.task()
+        self.assertEqual(process.call_count,1)
+        self.assertEqual(result['handoff']['reason'],'time_budget_exhausted')
+
+    def test_slot_timeout_is_not_a_model_attempt_or_retried(self):
+        @contextlib.contextmanager
+        def no_slot(*args):
+            raise WorkerError('timeout','Waiting for slot exhausted the total budget')
+            yield
+        with mock.patch.object(self.manager,'_agy_slot',no_slot),mock.patch('worker.run_process') as process:
+            result=self.task()
+        self.assertEqual(result['attempts'],[])
+        self.assertEqual(result['handoff']['reason'],'time_budget_exhausted')
+        process.assert_not_called()
+
+    def test_explicit_max_attempts_one_and_five_are_respected(self):
+        for maximum in (1,5):
+            with self.subTest(maximum=maximum),mock.patch('worker.run_process',side_effect=WorkerError('empty_result','no answer')) as process:
+                result=self.task(max_attempts=maximum)
+                self.assertEqual(process.call_count,maximum)
+                self.assertEqual(result['handoff']['reason'],'attempts_exhausted')
+        for invalid in (0,6,True,'3'):
+            with self.assertRaises(WorkerError):self.manager.submit({'instruction':'OK','max_attempts':invalid})
+
+    def test_progress_reports_retrying_before_primary_takeover(self):
+        def inspect(job,seconds):
+            snapshot=self.manager.task_list(str(self.root))['tasks'][0]
+            self.assertEqual(snapshot['status'],'retrying')
+            self.assertNotIn('handoff',snapshot)
+            self.assertEqual(snapshot['retry_policy']['next_attempt'],2)
+            # The first call released its slot before waiting for backoff.
+            second=Manager(self.manager.state,agy='fake-agy',max_concurrency=1)
+            try:
+                with second._agy_slot({'cancel':threading.Event(),'status':'queued'},time.monotonic()+1):pass
+            finally:second.close()
+            return False
+        self.backoff.side_effect=inspect
+        with mock.patch('worker.run_process',side_effect=[WorkerError('timeout','deadline'),self.envelope()]):
+            result=self.task()
+        self.assertEqual(result['status'],'completed',result)
+
+
+class FailureClassificationTests(unittest.TestCase):
+    def test_cli_stderr_network_failure_is_retryable_but_auth_is_not(self):
+        for stderr,expected in [('request: EOF','transient_error'),('connection reset by peer','transient_error'),('503 Service Unavailable','transient_error'),('context deadline exceeded','timeout'),('401 permission denied; EOF','agy_failed')]:
+            with self.subTest(stderr=stderr),self.assertRaises(WorkerError) as caught:
+                decode_result('',stderr,1)
+            self.assertEqual(caught.exception.code,expected)
+
+    def test_successful_text_mentioning_errors_is_not_a_failure(self):
+        result,_=decode_result(json.dumps({'status':'SUCCESS','response':'An EOF or quota error was documented.'}),'',0)
+        self.assertIn('documented',result)
+
+
+if __name__=='__main__':unittest.main()

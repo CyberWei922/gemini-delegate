@@ -1,3 +1,39 @@
+# Release verification 1.5.0
+
+Date: 2026-10-15. The retry policy now reserves time for recovery instead of
+giving the whole default deadline to the first call.
+
+- Local macOS: 105 runtime tests passed (4 Windows-only skips), plus 14
+  installer/protocol tests. The updated skill passed Skill Creator validation.
+- Local regression covers automatic success after two timeouts, exact attempt
+  limits, permanent auth/quota/permission failures, EOF recovery, timeout budget
+  exhaustion, shorter-budget rejection after slot contention, cancellation,
+  released slots during backoff, retry progress visibility and persisted handoff.
+  Failed/retried usage is counted once, and missing counters remain unknown.
+- Compatibility-client tests verify explicit retry options override input JSON.
+  A fresh MCP with a simulated CLI retries two temporary EOF errors before a
+  validated third result. This is deterministic protocol testing, not live Google
+  network-failure evidence.
+- Live fault-injection task `e452c65ccee94e5d` used two deliberately timed-out
+  local Python test processes, followed by one real official AGY
+  `gemini-3.8-flash-high` invocation on attempt 3. The first two attempts did NOT
+  call Gemini and are not reported as Google failures. Model budgets were
+  60/90/120 seconds; backoff was 1/2 seconds. The actual High response matched
+  `RETRY_OK` and a unique nonce, without primary-agent takeover. Total task time
+  was 26.30 seconds; AGY reported 6,912 tokens for the actual model call. Unknown
+  usage for injected failures remains explicit rather than counted as zero.
+- The new native AGY conversation belongs to the plugin repository workspace.
+  Its Chinese native rename still needs the user's official first-use project
+  trust choice; `requires_trust` is reported and the valid model result is kept.
+- Fixed High membership execution, independent contexts, staged edit review,
+  two shared concurrency slots and Windows process cleanup are preserved. The
+  plugin returns handoff to its calling primary agent; it does not create a GPT
+  bridge or invoke a paid API. No automatic webpage is added.
+
+Machine-specific fault-injection scripts, input data, full outputs and receipts
+are kept outside the public source. Remote CI is simulated-service verification;
+inspect the release commit's Actions result for platform status.
+
 # Release verification 1.4.1
 
 Date: 2026-10-15. This release combines the retained 1.4.0 local features with

@@ -7,7 +7,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'server'))
 from main import call
-from worker import Manager
+from worker import Manager, DEFAULT_TIMEOUT_SECONDS
 from host_tools import configure_stdio
 from runtime_config import manager_options
 
@@ -27,8 +27,9 @@ def run():
     parser.add_argument('--instruction')
     parser.add_argument('--context', default='')
     parser.add_argument('--input', help='JSON file containing delegate_task arguments')
-    parser.add_argument('--timeout', type=int, default=180)
-    parser.add_argument('--attempt-timeout', type=int, help='Optional first-attempt cap; total timeout still bounds all attempts')
+    parser.add_argument('--timeout', type=int, default=DEFAULT_TIMEOUT_SECONDS)
+    parser.add_argument('--max-attempts',type=int,choices=range(1,6),help='Total attempts including the first; default 3, 1 disables retries')
+    parser.add_argument('--attempt-timeout', type=int, help='Optional initial attempt cap; later caps grow by 50%% of it, within the total deadline')
     parser.add_argument('--agy', help='Override the installed official AGY path')
     parser.add_argument('--state-dir', type=Path, help='Override the installed task directory')
     args = parser.parse_args()
@@ -69,6 +70,8 @@ def run():
                 task['title'] = args.title
         if args.attempt_timeout is not None:
             task['attempt_timeout_seconds'] = args.attempt_timeout
+        if args.max_attempts is not None:
+            task['max_attempts'] = args.max_attempts
         submitted = call(manager, 'delegate_task', task)
         print(json.dumps(submitted,ensure_ascii=False),flush=True)
         while True:

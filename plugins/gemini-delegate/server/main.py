@@ -2,7 +2,7 @@
 """Dependency-free MCP stdio entry point. Protocol only on stdout."""
 import json
 import sys
-from worker import Manager, WorkerError, VERSION
+from worker import Manager, WorkerError, VERSION, DEFAULT_TIMEOUT_SECONDS, DEFAULT_MAX_ATTEMPTS
 from host_tools import configure_stdio
 
 OBJECT = {'type':'object'}
@@ -16,8 +16,9 @@ TASK_SCHEMA = {'type':'object','properties':{
     'search_query':{'type':'string','description':'Optional public web research query through the existing Agent Reach Exa backend.'},
     'response_type':{'type':'string','enum':['text','json','edit'],'default':'text','description':'edit returns staged replacements of explicit input files; apply after primary review.'},
     'result_schema':{'type':'object','description':'Optional JSON result contract. Supports type/properties/required/additionalProperties/items/minItems/maxItems/enum/const/minimum/maximum/minLength/maxLength/pattern. No $ref or combinators.'},
-    'timeout_seconds':{'type':'integer','minimum':15,'maximum':600,'default':180,'description':'Overall execution budget for source retrieval, shared AGY slot waiting and all attempts; begins when the queued worker starts.'},
-    'attempt_timeout_seconds':{'type':'integer','minimum':15,'maximum':600,'description':'Optional first-attempt cap. Default uses the remaining overall budget, without a hidden 75-second cap. One timeout retry is allowed only with a larger budget.'}
+    'timeout_seconds':{'type':'integer','minimum':15,'maximum':600,'default':DEFAULT_TIMEOUT_SECONDS,'description':'Total budget for retrieval, shared-slot waiting, backoff and all attempts. Default 300 seconds; retries never reset this deadline.'},
+    'max_attempts':{'type':'integer','minimum':1,'maximum':5,'default':DEFAULT_MAX_ATTEMPTS,'description':'Total Gemini attempts including the first, default 3. Recoverable failures retry automatically; wait for terminal status before primary-agent takeover. Set 1 to disable retries.'},
+    'attempt_timeout_seconds':{'type':'integer','minimum':15,'maximum':600,'description':'Optional initial attempt cap. Automatic initial cap is up to 60 seconds, scaled to fit total budget. Later caps grow by 50% of the initial cap each time. Timeout retries require a strictly longer remaining process budget.'}
 },'required':['instruction'],'additionalProperties':False}
 
 TOOLS = [
@@ -26,7 +27,7 @@ TOOLS = [
     {'name':'task_monitor','description':'Start or reuse the local read-only Gemini task monitor and return dashboard_url. Open it with open_in_codex in the right-side browser panel. It shows real external Gemini jobs, not native GPT subagents.', 'inputSchema':{'type':'object','properties':{'workspace':{'type':'string'}},'additionalProperties':False},'annotations':{'readOnlyHint':False,'destructiveHint':False,'openWorldHint':False}},
     {'name':'gemini_status','description':'Inspect Gemini Delegate configuration and AGY availability. Default model is Gemini 3.8 Flash High; planning remains in GPT.', 'inputSchema':{'type':'object','properties':{},'additionalProperties':False},'annotations':{'readOnlyHint':True,'openWorldHint':False}},
     {'name':'delegate_task','description':'Delegate bounded research, text/file processing, code inventory or specified mechanical edits to Gemini High using the official AGY membership session. Returns an asynchronous task ID. Web access uses a controlled read-only adapter; AGY has a scoped read grant for the plugin task directory and no global browsing grant. Never delegates complex planning or final judgments.','inputSchema':TASK_SCHEMA,'annotations':{'readOnlyHint':False,'destructiveHint':False,'openWorldHint':True}},
-    {'name':'get_task_result','description':'Read task status, validated result, evidence URLs, attempts, token usage and staged artifacts. Incomplete/empty/permission-denied AGY success is treated as failure. Read edits before applying.','inputSchema':{'type':'object','properties':{'task_id':{'type':'string'},'wait_seconds':{'type':'number','minimum':0,'maximum':20,'default':0},'max_chars':{'type':'integer','minimum':500,'maximum':16000,'default':6000}},'required':['task_id'],'additionalProperties':False},'annotations':{'readOnlyHint':True,'openWorldHint':False}},
+    {'name':'get_task_result','description':'Read task status, validated result, attempts, usage and artifacts. While retrying, continue independent work and wait; do not take over early. Terminal failed results include handoff for the primary agent after automatic attempts stop. Cancellation is not a handoff. Read edits before applying.','inputSchema':{'type':'object','properties':{'task_id':{'type':'string'},'wait_seconds':{'type':'number','minimum':0,'maximum':20,'default':0},'max_chars':{'type':'integer','minimum':500,'maximum':16000,'default':6000}},'required':['task_id'],'additionalProperties':False},'annotations':{'readOnlyHint':True,'openWorldHint':False}},
     {'name':'cancel_task','description':'Cancel a queued/running Gemini task and stop its CLI process group. Completed work is preserved.','inputSchema':{'type':'object','properties':{'task_id':{'type':'string'}},'required':['task_id'],'additionalProperties':False},'annotations':{'readOnlyHint':False,'destructiveHint':False,'openWorldHint':False}},
     {'name':'apply_task_changes','description':'After primary-agent review, apply staged replacements only to originally supplied files. Reject source conflicts or tampered artifacts, retain backups, and roll back write failures. Requires existing user authorization for those edits.','inputSchema':{'type':'object','properties':{'task_id':{'type':'string'},'reviewed':{'type':'boolean','const':True}},'required':['task_id','reviewed'],'additionalProperties':False},'annotations':{'readOnlyHint':False,'destructiveHint':False,'openWorldHint':False}}
 ]

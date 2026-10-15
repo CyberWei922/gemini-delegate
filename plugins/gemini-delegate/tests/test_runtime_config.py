@@ -96,6 +96,35 @@ class RuntimeConfigTests(unittest.TestCase):
         self.assertEqual(result['result'],{'check':'GEMINI_OK'})
         self.assertTrue((self.state/'jobs'/result['id']/'metadata.json').is_file())
 
+    def test_client_retry_option_applies_to_input_json_and_terminal_handoff(self):
+        self.agy.write_text('import json\nprint(json.dumps({"status":"SUCCESS","response":""}))',encoding='utf-8')
+        task=self.root/'task.json'
+        task.write_text(json.dumps({'instruction':'Return OK','workspace':str(self.root),'max_attempts':5}),encoding='utf-8')
+        result=subprocess.run([sys.executable,str(self.plugin/'scripts/delegate.py'),'--input',str(task),'--max-attempts','1'],env=self.env,capture_output=True,text=True,encoding='utf-8',timeout=15)
+        self.assertEqual(result.returncode,1,result.stdout+result.stderr)
+        terminal=json.loads(result.stdout.splitlines()[-1])
+        self.assertEqual(len(terminal['attempts']),1)
+        self.assertEqual(terminal['retry_policy']['max_attempts'],1)
+        self.assertEqual(terminal['handoff']['reason'],'attempts_exhausted')
+
+    def test_fresh_mcp_retries_temporary_cli_failures_before_returning_success(self):
+        counter=self.root/'calls.txt'
+        self.agy.write_text('''import json
+from pathlib import Path
+p=Path(COUNTER);count=int(p.read_text())+1 if p.exists() else 1;p.write_text(str(count))
+if count<3:
+ print(json.dumps({'status':'ERROR','error':'stream request: EOF'}))
+ raise SystemExit(1)
+print(json.dumps({'status':'SUCCESS','response':'{"check":"GEMINI_OK"}'}))
+'''.replace('COUNTER',repr(str(counter))),encoding='utf-8')
+        result=subprocess.run([sys.executable,str(REPO/'scripts/smoke.py'),'--plugin-root',str(self.plugin),'--workspace',str(self.root),'--timeout','30'],env=self.env,capture_output=True,text=True,encoding='utf-8',timeout=20)
+        self.assertEqual(result.returncode,0,result.stderr+'\n'+result.stdout)
+        terminal=json.loads(result.stdout.splitlines()[-1])
+        self.assertTrue(terminal['passed'])
+        self.assertEqual(len(terminal['attempts']),3)
+        self.assertEqual([a.get('error_code') for a in terminal['attempts']],['transient_error','transient_error',None])
+        self.assertEqual(counter.read_text(),'3')
+
     def test_client_explicit_cli_and_state_overrides_are_honored(self):
         alternate=self.root/'alternate.py';self.make_agy(alternate,'OVERRIDE_OK')
         state=self.root/'alternate-state'
