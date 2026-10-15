@@ -69,7 +69,19 @@ def main():
         expected={'check':'GEMINI_OK'}
         if args.file_task:
             fields={'model':{'type':'string'},'chunk_bytes':{'type':'integer'},'default_attempt_cap':{'type':'string'},'retry_error_codes':{'type':'array','items':{'type':'string'}},'test_name':{'type':'string'}}
-            task.update(title='修复后真实文件读取检查',instruction='只读完成源码提取，不运行测试、不编辑文件、不联网、不制定方案。读取索引及所列文件的所有文本块，从 worker.py 提取 MODEL 字符串、INPUT_CHUNK_BYTES 整数、Manager.__init__ 的 attempt_seconds 默认值（None 写成字符串 none）、RETRYABLE_CODES 的五个错误代码（保持源码元组顺序）；从 test_worker.py 提取证明默认超时不重复重试的测试函数名。只返回 JSON，字段依次为 model、chunk_bytes、default_attempt_cap、retry_error_codes、test_name。不要输出分析。',input_files=[str(args.plugin_root.resolve()/'server/worker.py'),str(args.plugin_root.resolve()/'tests/test_worker.py')],result_schema={'type':'object','properties':fields,'required':list(fields),'additionalProperties':False})
+            instruction=(
+                '只读完成源码提取，不运行测试、不编辑文件、不联网、不制定方案。'
+                '读取索引及所列文件的所有文本块，从 worker.py 提取 MODEL 字符串、'
+                'INPUT_CHUNK_BYTES 整数、Manager.__init__ 的 attempt_seconds 默认值'
+                '（None 写成字符串 none）、RETRYABLE_CODES 的五个错误代码'
+                '（保持源码元组顺序）；从 test_worker.py 提取证明单次模式超时不重复重试的测试函数名。'
+                '只返回 JSON，字段依次为 model、chunk_bytes、default_attempt_cap、'
+                'retry_error_codes、test_name。不要输出分析。')
+            task.update(title='修复后真实文件读取检查',instruction=instruction,
+                        input_files=[str(args.plugin_root.resolve()/'server/worker.py'),
+                                     str(args.plugin_root.resolve()/'tests/test_worker.py')],
+                        result_schema={'type':'object','properties':fields,'required':list(fields),
+                                       'additionalProperties':False})
             expected={'model':'gemini-3.8-flash-high','chunk_bytes':24576,'default_attempt_cap':'none','retry_error_codes':['timeout','empty_result','invalid_result','invalid_envelope','transient_error'],'test_name':'test_single_attempt_timeout_does_not_retry'}
         job=tool('delegate_task',task)
         print(json.dumps({'phase':'submitted','task_id':job['task_id'],'model':job['model']}),flush=True)

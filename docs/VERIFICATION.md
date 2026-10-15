@@ -14,6 +14,11 @@ giving the whole default deadline to the first call.
   A fresh MCP with a simulated CLI retries two temporary EOF errors before a
   validated third result. This is deterministic protocol testing, not live Google
   network-failure evidence.
+- The first CI run found Windows Python 3.9 could not parse an overlong Chinese
+  source line in the smoke client. That instruction is now split across adjacent
+  literals; the actual file-task instruction is unchanged in meaning. This was
+  a source-tokenizer compatibility failure before any model call, not a Gemini
+  retry failure. Both smoke-client regressions remain enabled in the CI matrix.
 - Live fault-injection task `e452c65ccee94e5d` used two deliberately timed-out
   local Python test processes, followed by one real official AGY
   `gemini-3.8-flash-high` invocation on attempt 3. The first two attempts did NOT
