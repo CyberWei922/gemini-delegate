@@ -45,7 +45,17 @@ when their dependent step is ready; use bounded waits of at most 20 seconds.
 Never proceed with a decision or write that depends on a result before it arrives.
 If there is no meaningful independent work, explain that the Gemini result is
 needed next and wait honestly rather than claim parallel execution. AGY jobs are
-serialized across chats; GPT work can run concurrently with the one active job.
+bounded to two independent calls by default across processes sharing one state
+directory; explicit concurrency 1 remains available. Check
+gemini_status.max_concurrent_agy_calls rather than assuming a queued job is
+already executing. GPT can continue independent work under either setting.
+
+At the start of a chat or after an upgrade, check gemini_status once. If the
+loaded plugin_version is older than this bundle's plugin.json or lacks native
+workspace/title support, use this installed bundle's scripts/delegate.py for
+new work and usage queries. A successful compatibility call does not prove that
+the chat's old native MCP process has reloaded. Never kill or reload other chats
+to refresh a stale connection.
 
 Announce the actual task sent to Gemini High, give it a concise Chinese title,
 and pass the real project workspace. Use the Gemini MCP tools or bundled CLI
@@ -93,8 +103,8 @@ worker and evidence trail, not a different model or paid API fallback.
    - Mechanical edits: use `response_type: edit` and explicit input files.
      Gemini returns replacements; originals remain unchanged until application.
 3. Read `get_task_result`. Do independent work while it runs; wait at most 20
-   seconds per call and avoid frequent polling. AGY execution is serialized for
-   shared-harness stability. Keep individual tasks narrow and independently
+   seconds per call and avoid frequent polling. AGY concurrency defaults to two;
+   respect explicit serial settings and actual backend failures. Keep individual tasks narrow and independently
    checkable; split big heterogeneous batches instead of endlessly retrying them.
 4. Treat success as transport/schema validation, not proof of factual or code
    correctness. Review evidence URLs, extract counts, calculations, and relevant
@@ -114,6 +124,21 @@ worker and evidence trail, not a different model or paid API fallback.
    local result artifact when completeness is needed.
 
 ## Failure and quota behavior
+
+For usage questions, call usage_summary with the real workspace. It aggregates
+all task records and retries without the task-list display limit. Default to
+compact project totals; request include_tasks only for a named task/native ID
+mapping. Missing attempt usage is unknown, not zero; do not add thinking or
+cache counts again to total_tokens. Grouping is accounting only: every model
+attempt stays independent and starts in the real project workspace, without
+--continue/--conversation. On macOS/Linux the worker resumes ONLY its own native
+ID in a ready official TUI to execute /rename and /exit; this is metadata, not
+another model turn or shared history for a different task. Read native_title
+status before claiming a native name was set; Windows currently reports
+unsupported. AGY 1.3.5 print-mode /rename is unavailable and --prompt-interactive
+/rename goes to the model; neither may substitute for the native command.
+Token Monitor display/refresh still requires actual observation.
+Never change other chats' concurrency or reload them to run a local trial.
 
 The wrapper rejects nonzero exits, non-SUCCESS statuses, soft permission denials,
 empty results, partial timeout output, malformed JSON, schema/count mismatches,

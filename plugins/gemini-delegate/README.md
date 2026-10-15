@@ -4,8 +4,8 @@ See the repository [README](../../README.md) and [AGENTS installation guide](../
 The canonical version is in `plugin.json`; the Python server reads it at startup.
 This directory is the portable plugin bundle, including its MIT license.
 
-Seven tools expose status, asynchronous submission/result/cancellation, reviewed
-file application, project task history and an optional read-only task monitor.
+Eight tools expose status, asynchronous submission/result/cancellation, reviewed
+file application, project task history, usage_summary and an optional read-only task monitor.
 The Skill teaches Codex to announce Gemini Delegate, dispatch independent work
 early and continue its own planning/review concurrently. These are agent
 instructions, not a forced routing hook or native Gemini subagent registration.
@@ -13,8 +13,8 @@ instructions, not a forced routing hook or native Gemini subagent registration.
 Runtime requirements: macOS/Linux or Windows 10/11 (preview), Python 3.9+, authenticated official AGY and
 the exact `gemini-3.8-flash-high` model. No third-party Python dependencies.
 The worker fixes this High model and invokes AGY with bounded print mode, JSON
-output, sandbox hints and an isolated worker agent. An AGY process is serialized
-across chats and stopped as a process tree on cancellation/hard timeout (POSIX
+output, sandbox hints and an isolated worker agent. AGY defaults to two
+independent concurrent calls; explicit concurrency 1 selects serial execution. Calls are stopped as a process tree on cancellation/hard timeout (POSIX
 process groups; Windows Job Objects with a gated launcher). A
 recoverable output failure may retry once. A timeout retry requires an explicitly
 bounded first attempt and a strictly longer available retry budget. The wrapper rejects soft-denied, empty or
@@ -28,7 +28,8 @@ that cap, bounded by the remaining total budget and rechecked after slot waiting
 Cancellation/process cleanup may take a short additional grace period.
 
 Optional environment overrides: `GEMINI_DELEGATE_AGY` and
-`GEMINI_DELEGATE_STATE_DIR`. The installer records the detected values in its
+`GEMINI_DELEGATE_STATE_DIR`; `GEMINI_DELEGATE_MAX_CONCURRENCY` defaults to 2
+(only 1 or 2 accepted). The installer records the detected paths in its
 local MCP registration. Runtime defaults use the current user's home and PATH.
 Windows state defaults to `%LOCALAPPDATA%\GeminiDelegate`. Native `.exe` and npm
 Node `.cmd` entrypoints are supported without passing task arguments through a
@@ -54,6 +55,8 @@ The CLI compatibility client runs the same worker:
 
 ```sh
 python3 scripts/delegate.py --list --workspace /absolute/project
+python3 scripts/delegate.py --usage --workspace /absolute/project
+python3 scripts/delegate.py --usage --workspace /absolute/project --export project-usage.json
 python3 scripts/delegate.py --workspace /absolute/project --title "整理名称" \
   --instruction "提取唯一名称，保持顺序" --context "Alice, Bob, Alice"
 ```
@@ -68,3 +71,26 @@ Do not publish the monitor URL. No arbitrary filesystem endpoint is provided.
 Input bundles are deleted after each execution. Task metadata/results, evidence
 hashes, candidates and backups remain private on disk. Google/AGY retention is
 independent. Missing usage means unknown. Uninstall deliberately retains work.
+
+`usage_summary` reads all recorded tasks, including records beyond the 200-row
+task-list limit, and counts retries once. Compact totals are the default;
+`include_tasks: true` / CLI `--include-tasks` adds readable names and native
+conversation ID mappings when AGY reports them. CLI exports include these details
+and refuse to overwrite existing files. Thinking/cache fields are reported
+separately and never added again to total_tokens. Every model attempt uses a
+fresh `agy -p` call in the real project directory, without history continuation.
+Input snapshots remain in private per-task directories. The restricted worker
+is discovered through official `~/.gemini/config/agents/`; conflicting user
+definitions are preserved and reported.
+
+On macOS/Linux, the official TUI is resumed only to type `/rename` after its
+editor is ready, then `/exit`. This changes the native title without a model
+turn. Never send `/rename` via print mode or `--prompt-interactive` in AGY 1.3.5.
+The operation shares concurrency/deadline/cancellation controls and records
+native_title status without re-running model work. Windows native title transport
+is explicitly unsupported pending ConPTY implementation; project cwd still works.
+Uninstallation currently retains the global worker definition; remove it only
+after confirming it is unchanged and unused. Native conversations remain owned
+and stored by AGY. Token Monitor display is independently checked by the user.
+Use a fresh state directory for concurrency trials alongside older workers;
+see [trial instructions](../../docs/CONCURRENCY.md).

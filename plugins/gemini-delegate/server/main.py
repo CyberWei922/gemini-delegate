@@ -7,10 +7,10 @@ from host_tools import configure_stdio
 
 OBJECT = {'type':'object'}
 TASK_SCHEMA = {'type':'object','properties':{
-    'title':{'type':'string','minLength':1,'maxLength':160,'description':'Short user-visible task name for the right-side Gemini task monitor. Do not include secrets.'},
+    'title':{'type':'string','minLength':1,'maxLength':160,'description':'Short readable work name, preferably Chinese for Chinese users. Included in task records and the AGY prompt; does not rename native provider sessions. Do not include secrets.'},
     'instruction':{'type':'string','description':'One explicit, bounded task. Keep complex planning and judgments in the primary agent.'},
     'context':{'type':'string','description':'Supplied task data; up to 48000 characters. Split independent large jobs.'},
-    'workspace':{'type':'string','description':'Absolute directory containing the explicitly supplied files.'},
+    'workspace':{'type':'string','description':'Absolute project directory, used as AGY working directory and source-file boundary. Native AGY conversations belong to this directory.'},
     'input_files':{'type':'array','items':{'type':'string'},'maxItems':8,'description':'Explicit UTF-8 files inside workspace. Originals are read only.'},
     'web_urls':{'type':'array','items':{'type':'string'},'maxItems':4,'description':'Public pages to fetch through the plugin read-only adapter before AGY runs.'},
     'search_query':{'type':'string','description':'Optional public web research query through the existing Agent Reach Exa backend.'},
@@ -21,6 +21,7 @@ TASK_SCHEMA = {'type':'object','properties':{
 },'required':['instruction'],'additionalProperties':False}
 
 TOOLS = [
+    {'name':'usage_summary','description':'Aggregate all recorded tasks and retries by absolute project workspace, without sharing model context. Missing usage remains explicitly unknown. No task-list display limit applies. Compact totals by default; include_tasks adds readable names and native conversation ID mappings.', 'inputSchema':{'type':'object','properties':{'workspace':{'type':'string'},'include_tasks':{'type':'boolean','default':False}},'additionalProperties':False},'annotations':{'readOnlyHint':True,'openWorldHint':False}},
     {'name':'list_tasks','description':'Show actual Gemini Delegate task records, live state, project, attempts, usage and bounded results across chats. Filter by the current project to check whether it used Gemini. No task means no delegation through this plugin.', 'inputSchema':{'type':'object','properties':{'workspace':{'type':'string'},'limit':{'type':'integer','minimum':1,'maximum':200,'default':200}},'additionalProperties':False},'annotations':{'readOnlyHint':True,'openWorldHint':False}},
     {'name':'task_monitor','description':'Start or reuse the local read-only Gemini task monitor and return dashboard_url. Open it with open_in_codex in the right-side browser panel. It shows real external Gemini jobs, not native GPT subagents.', 'inputSchema':{'type':'object','properties':{'workspace':{'type':'string'}},'additionalProperties':False},'annotations':{'readOnlyHint':False,'destructiveHint':False,'openWorldHint':False}},
     {'name':'gemini_status','description':'Inspect Gemini Delegate configuration and AGY availability. Default model is Gemini 3.8 Flash High; planning remains in GPT.', 'inputSchema':{'type':'object','properties':{},'additionalProperties':False},'annotations':{'readOnlyHint':True,'openWorldHint':False}},
@@ -37,6 +38,8 @@ def call(manager, name, args):
         raise WorkerError('unknown_tool','Unknown tool')
     from worker import validate_schema
     validate_schema(args,spec['inputSchema'])
+    if name=='usage_summary':
+        return manager.usage_summary(args.get('workspace'),args.get('include_tasks',False))
     if name=='list_tasks':
         return manager.task_list(args.get('workspace'),args.get('limit',200))
     if name=='task_monitor':

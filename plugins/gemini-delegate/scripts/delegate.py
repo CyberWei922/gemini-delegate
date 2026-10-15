@@ -16,6 +16,11 @@ def run():
     parser = argparse.ArgumentParser()
     parser.add_argument('--monitor', action='store_true')
     parser.add_argument('--list', action='store_true')
+    parser.add_argument('--usage', action='store_true', help='Summarize all project tasks and retries without supplying model history')
+    parser.add_argument('--all-projects', action='store_true', help='With --usage, include every recorded workspace')
+    parser.add_argument('--include-tasks', action='store_true', help='With --usage, include named task details and native conversation mappings')
+    parser.add_argument('--export', help='With --usage, write a UTF-8 JSON report with readable task names')
+    parser.add_argument('--max-concurrency', type=int, choices=(1,2), help='AGY concurrency; default 2, explicitly choose 1 for serial execution')
     parser.add_argument('--workspace', default=str(Path.cwd()))
     parser.add_argument('--title')
     parser.add_argument('--instruction')
@@ -24,13 +29,29 @@ def run():
     parser.add_argument('--timeout', type=int, default=180)
     parser.add_argument('--attempt-timeout', type=int, help='Optional first-attempt cap; total timeout still bounds all attempts')
     args = parser.parse_args()
-    manager = Manager()
+    if (args.all_projects or args.export or args.include_tasks) and not args.usage:
+        parser.error('--all-projects, --export and --include-tasks require --usage')
+    if sum((args.monitor, args.list, args.usage)) > 1:
+        parser.error('choose one of --monitor, --list or --usage')
+    manager = Manager(max_concurrency=args.max_concurrency)
     try:
         if args.monitor:
             print(json.dumps(call(manager, 'task_monitor', {'workspace':args.workspace}),ensure_ascii=False),flush=True)
             return
         if args.list:
             print(json.dumps(call(manager, 'list_tasks', {'workspace':args.workspace}),ensure_ascii=False),flush=True)
+            return
+        if args.usage:
+            summary_args = {'include_tasks':bool(args.include_tasks or args.export)}
+            if not args.all_projects:
+                summary_args['workspace'] = args.workspace
+            summary = call(manager, 'usage_summary', summary_args)
+            if args.export:
+                # Never silently overwrite a user file or follow an export symlink.
+                with Path(args.export).expanduser().open('x', encoding='utf-8') as output:
+                    json.dump(summary, output, ensure_ascii=False, indent=2)
+                Path(args.export).expanduser().chmod(0o600)
+            print(json.dumps(summary,ensure_ascii=False),flush=True)
             return
         if args.input:
             task = json.loads(Path(args.input).read_text(encoding='utf-8-sig'))

@@ -11,6 +11,8 @@ import unittest
 from unittest import mock
 
 ROOT=Path(__file__).resolve().parents[1]
+sys.path.insert(0,str(ROOT/'plugins/gemini-delegate/server'))
+from worker import AGENT
 sys.path.insert(0,str(ROOT/'scripts'))
 import install
 import uninstall
@@ -154,6 +156,9 @@ class PackageTests(unittest.TestCase):
     def test_mcp_protocol_uses_utf8_despite_legacy_console_encoding(self):
         with tempfile.TemporaryDirectory(prefix='Gemini 协议 ') as directory:
             root=Path(directory)
+            agent=root/'.agents/agents/gemini-delegate-worker.md'
+            agent.parent.mkdir(parents=True)
+            agent.write_text(AGENT,encoding='utf-8')
             fake=root/'fake-agy.py'
             fake.write_text('import json;print(json.dumps({"status":"SUCCESS","response":"OK"}))',encoding='utf-8')
             request={'jsonrpc':'2.0','id':1,'method':'tools/call','params':{'name':'delegate_task','arguments':{

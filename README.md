@@ -3,7 +3,7 @@
 <p align="center">让 Gemini High 处理简单任务，让 GPT 专注规划、判断和复核。</p>
 
 <p align="center">
-  <a href="https://github.com/CyberWei922/gemini-delegate/releases"><img src="https://img.shields.io/badge/Version-1.3.0-007EC6?style=flat-square" alt="版本 1.3.0"></a>
+  <a href="https://github.com/CyberWei922/gemini-delegate/releases"><img src="https://img.shields.io/badge/Version-1.4.0-007EC6?style=flat-square" alt="版本 1.4.0"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-007EC6?style=flat-square" alt="MIT 开源协议"></a>
   <a href="AGENTS.md"><img src="https://img.shields.io/badge/Python-3.9%2B-3776AB?style=flat-square" alt="Python 3.9 及以上"></a>
   <a href="docs/VERIFICATION.md"><img src="https://img.shields.io/badge/macOS-verified-111827?style=flat-square" alt="macOS 已实际调用验证"></a>
@@ -19,6 +19,10 @@
 
 通过本机官方 Antigravity CLI（AGY），使用你自己的 Google 账号和模型额度。
 独立社区项目，由 CyberWei922 发起、AI 辅助开发，不隶属于 Google 或 OpenAI。
+
+1.4.0 默认双任务并发，按项目汇总用量，并记录中文任务名称。
+AGY 在当前项目中启动，并使用官方交互命令设置原生中文会话名（macOS 已实测；Windows 自动改名待适配）。
+可显式切回单任务执行，使用方式与限制见[并发与用量说明](docs/CONCURRENCY.md)。
 
 ## 把链接交给 Codex 安装
 
@@ -48,6 +52,7 @@
 
 通过 `list_tasks` 查看真实任务记录。插件目前无法把 Gemini 显示为 Codex 原生子智能体；
 网页看板只在你明确要求时打开。并行分工能否提速，取决于任务和调用开销。
+`usage_summary` 按项目汇总所有记录和重试；统计分组不共享模型上下文。
 
 ## 执行与数据
 

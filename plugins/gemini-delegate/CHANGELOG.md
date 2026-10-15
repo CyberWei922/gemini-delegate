@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.4.0 — 2026-10-15
+
+- Retain the validated native workspace/title, project accounting and independent context features.
+- Default AGY concurrency is now 2, with explicit 1 still supported.
+- Upgrade the existing local installation and preserve user configuration; use the new compatibility client when a chat's MCP is stale.
+- 66 runtime tests (4 Windows-only skips on macOS) and 11 installer/protocol tests passed.
+- Installed-runtime live verification is recorded in the private upgrade receipt; Windows native title transport remains unavailable.
+
+## 1.4.0-preview.2 — 2026-10-15（本地试验，未发布）
+
+- Start official AGY model calls in the actual project workspace; private input snapshots stay separate.
+- Discover the restricted worker through the official global agents directory; preserve conflicting configurations.
+- Set native Chinese titles through a ready official TUI's /rename and /exit with shared slots and bounded cleanup.
+- No print-mode rename, no startup-prompt rename, no native storage writes; Windows interactive rename remains unsupported.
+- 66 runtime tests (4 Windows-only skips), 11 installer/protocol tests. Two real High tasks each succeeded once;
+  overlapping calls 16.35s, 11,911 reported tokens. Native records confirmed project paths, exact Chinese titles,
+  distinct IDs and 2 steps each (no additional model turn for rename).
+
+## 1.4.0-preview.1 — 2026-10-15（本地试验，未发布）
+
+- Opt-in two-call AGY execution with shared cross-process slots; serial remains the default.
+- Project usage_summary includes all recorded tasks/retries, readable work names and real returned AGY conversation IDs.
+- Independent per-attempt contexts, compact totals, explicit unknown usage and non-overwriting JSON export.
+- macOS: 56 runtime tests (4 Windows-only skips), 11 installer/protocol tests; two real Gemini High calls validated,
+  no retries, 17.06 seconds of overlapping process lifetimes and 9,948 reported total tokens.
+- Production installation unchanged pending user review; no new Windows account or remote CI verification.
+
 ## 1.2.2 — 2026-10-14
 
 - Replaced escaped one-line input bundles with a bounded manifest and lossless

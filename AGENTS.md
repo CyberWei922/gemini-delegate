@@ -126,10 +126,10 @@ codex plugin list --json
 ```
 
 确认插件启用，MCP 使用检测到的 Python、安装后的服务路径和预期环境。
-检查当前会话是否暴露以下七个工具：
+检查当前会话是否暴露以下八个工具（1.4.0 包含 `usage_summary`）：
 
 `gemini_status`、`delegate_task`、`get_task_result`、`cancel_task`、
-`apply_task_changes`、`list_tasks`、`task_monitor`。
+`apply_task_changes`、`list_tasks`、`usage_summary`、`task_monitor`。
 
 旧对话可能仍保留旧 MCP 进程或工具目录。可用宿主支持的方式只重新加载当前会话，
 或先用新安装的兼容客户端检查同一个工作器。不要重启整个应用或中断其他对话。
@@ -184,6 +184,18 @@ AGY 执行槽等待和全部尝试。没有隐藏的 75 秒限制。较多文件
 按真实项目调用 `list_tasks` 查看记录。插件不会把 Gemini 注册成 Codex 原生
 子智能体；不要用 GPT 桥梁或伪造记录模仿。网页看板仅在用户明确要求时打开。
 分工可能提升整体速度，不保证每项任务提速，也不能用 Gemini tokens 直接换算 GPT 节省比例。
+
+1.4.0 默认允许两个独立 Gemini 任务并发，可用环境变量或兼容客户端显式切回 1。
+升级后实际验收，不要为了刷新连接中断其他对话。完整步骤见
+[并发与用量说明](docs/CONCURRENCY.md)。每项任务传中文 `title` 和真实 `workspace`；
+`usage_summary` 默认仅返回项目汇总，`include_tasks: true` 才附任务名和 AGY 会话编号。
+合计包含有用量记录的失败尝试及重试，缺失记录标为未知；它不是完整账号账单。
+
+1.4.0 在真实项目目录启动 AGY，由 AGY 原生保存和归属会话；首次运行会在
+官方 `~/.gemini/config/agents/` 创建受限工作器定义，已有不同内容的同名配置保留并报错。
+macOS/Linux 使用已就绪的官方交互界面执行 `/rename` 设置中文名，随后退出；
+不能把 `/rename` 发给模型冒充成功。Windows 自动改名传输尚未适配，需如实报告。
+检查 `native_title` 与原生会话记录，不把插件显示名当成原生改名证据。
 
 ## 7. 更新和卸载
 

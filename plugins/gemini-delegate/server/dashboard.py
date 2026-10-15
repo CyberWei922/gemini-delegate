@@ -28,12 +28,15 @@ class LoopbackServer(ThreadingHTTPServer):
 
 
 def public_task(data):
-    keys = ('id', 'title', 'status', 'model', 'workspace', 'created_at',
+    keys = ('id', 'title', 'display_name', 'project_name', 'context_mode', 'plugin_version',
+            'status', 'model', 'workspace', 'created_at', 'agy_slot', 'agy_working_directory', 'native_title',
             'started_at', 'agy_started_at', 'finished_at', 'updated_at',
             'elapsed_seconds', 'input_parts', 'attempts', 'usage', 'error', 'applied_at',
             'owner_pid', 'result_preview', 'result_truncated')
     task = {k: data[k] for k in keys if k in data}
     task.setdefault('title', '历史任务 · ' + str(data.get('id', '')))
+    task.setdefault('project_name', Path(task.get('workspace') or '').name or '未指定项目')
+    task.setdefault('display_name', task['project_name']+' · '+task['title'])
     value = data.get('result')
     if isinstance(value, dict) and 'files' in value and data.get('changes'):
         value = {'summary': value.get('summary'),
@@ -70,7 +73,7 @@ def read_tasks(state, workspace=None, limit=200):
                 tasks.append(task)
             break
     tasks.sort(key=lambda t: t.get('created_at', 0), reverse=True)
-    return tasks[:limit]
+    return tasks if limit is None else tasks[:limit]
 
 
 def ensure_dashboard(state):

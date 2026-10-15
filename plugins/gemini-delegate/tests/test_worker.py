@@ -116,6 +116,8 @@ class WorkflowTests(unittest.TestCase):
         self.monitor = mock.patch.object(Manager,'task_monitor',return_value={'dashboard_url':'http://127.0.0.1/example'})
         self.monitor.start()
         self.addCleanup(self.monitor.stop)
+        agent = mock.patch('worker.prepare_agent')
+        agent.start();self.addCleanup(agent.stop)
         self.temp=tempfile.TemporaryDirectory()
         self.root=Path(self.temp.name)
         self.workspace=self.root/'workspace';self.workspace.mkdir()
@@ -123,7 +125,7 @@ class WorkflowTests(unittest.TestCase):
         self.worker=self.root/'fake-agy.py'
         self.worker.write_text('#!'+sys.executable+'\nimport json,sys\nprint(json.dumps({"status":"SUCCESS","response":json.dumps({"summary":"Changed sample","files":[{"path":"sample.txt","content":"new\\n"}]}),"usage":{"input_tokens":100,"output_tokens":20}}))\n', encoding='utf-8')
         self.worker.chmod(0o700)
-        self.manager=Manager(self.root/'state',str(self.worker),attempt_seconds=2)
+        self.manager=Manager(self.root/'state',str(self.worker),attempt_seconds=2,max_concurrency=1)
 
     def tearDown(self):
         self.manager.close();self.temp.cleanup()
@@ -265,8 +267,10 @@ class WorkflowTests(unittest.TestCase):
         original=('一段原始代码\n' * 2500 + '无换行😀' * 3500).encode('utf-8')
         self.source.write_bytes(original)
         self.manager.attempt_seconds=None
-        def inspect(argv,root,*args):
-            root=Path(root)
+        def inspect(argv,cwd,*args):
+            self.assertEqual(Path(cwd),self.workspace.resolve())
+            # Input snapshots stay private; the CLI itself starts in the project.
+            root=next((self.manager.state/'jobs').iterdir())
             manifest=json.loads((root/'input.json').read_text(encoding='utf-8'))
             self.assertGreater(len((root/'input.json').read_text(encoding='utf-8').splitlines()),1)
             self.assertNotIn('content',manifest['files'][0])

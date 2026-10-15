@@ -54,7 +54,7 @@ def main():
     try:
         init=rpc('initialize',{'protocolVersion':'2024-11-05','capabilities':{},'clientInfo':{'name':'gemini-delegate-release-check','version':'1.0'}})
         tools=[x['name'] for x in rpc('tools/list')['tools']]
-        assert len(tools)==7
+        assert len(tools)==8 and 'usage_summary' in tools
         status=tool('gemini_status',{})
         assert status['agy_available'] and status['model']=='gemini-3.8-flash-high'
         workspace=(args.workspace or args.plugin_root).resolve()
