@@ -105,7 +105,11 @@ def rename_conversation(agy, workspace, conversation, title, timeout, cancel, on
             elif result['status']!='set':
                 result.setdefault('reason','Official TUI did not acknowledge the rename within budget')
     except OSError as error:
-        result.update(reason='Native TUI operation failed',errno=error.errno)
+        # Process cleanup can fail after the trust prompt or rename ack.
+        # Preserve the confirmed outcome and its actionable explanation.
+        if result['status']=='failed':
+            result.setdefault('reason','Native TUI operation failed')
+        result['errno']=error.errno
     finally:
         if slave is not None:os.close(slave)
         os.close(master)

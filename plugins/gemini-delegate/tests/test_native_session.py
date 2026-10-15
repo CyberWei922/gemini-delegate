@@ -1,4 +1,5 @@
 import concurrent.futures
+import contextlib
 import json
 import os
 from pathlib import Path
@@ -10,6 +11,7 @@ from unittest import mock
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'server'))
 from native_session import prepare_agent, rename_conversation, AGENT_NAME
+import native_session
 from worker import Manager, AGENT, WorkerError
 
 
@@ -121,10 +123,18 @@ print('Do you trust the contents of this project?',flush=True)
 line=sys.stdin.readline()
 if line:Path(RECEIVED).write_text(line)
 '''.replace('RECEIVED',repr(str(received))),encoding='utf-8')
-        result=rename_conversation(str(fake),self.workspace,'test-session','中文工作名称',3,threading.Event(),lambda p:None)
-        self.assertEqual(result['status'],'requires_trust',result)
-        self.assertIn('review its trust prompt',result['reason'])
-        self.assertFalse(received.exists())
+        original=native_session.managed_process
+        @contextlib.contextmanager
+        def cleanup_error(*args,**kwargs):
+            with original(*args,**kwargs) as process:
+                yield process
+            raise PermissionError(1,'Simulated cleanup denial')
+        for process_manager in (original,cleanup_error):
+            with self.subTest(cleanup_failure=process_manager is cleanup_error),mock.patch('native_session.managed_process',process_manager):
+                result=rename_conversation(str(fake),self.workspace,'test-session','中文工作名称',3,threading.Event(),lambda p:None)
+                self.assertEqual(result['status'],'requires_trust',result)
+                self.assertIn('review its trust prompt',result['reason'])
+                self.assertFalse(received.exists())
 
     @unittest.skipIf(os.name=='nt','POSIX pseudo-terminal transport')
     def test_interactive_timeout_and_cancel_are_bounded(self):

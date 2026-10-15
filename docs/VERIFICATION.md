@@ -19,6 +19,11 @@ the published 1.3.1 fixes. Historical records below are unchanged.
   reports `native_title.status: requires_trust` instead of waiting for a generic
   rename timeout. It does not approve project-wide read/edit/execute permissions.
   Successful model work is retained and not repeated just to set a title.
+- After the fix, a metadata-only retry in that untrusted workspace reported
+  `requires_trust` in about four seconds. Reapplying the existing Chinese name to
+  the plugin's own previously verified Briskill conversation succeeded through
+  official AGY in about five seconds; the original workspace and two model steps
+  remained unchanged. No new model inference was used for these metadata checks.
 - An auxiliary documentation audit `13c5768ba7924e7c` failed with a Google
   streaming-request EOF; no retry was made. Its reported 84,889 tokens remain
   recorded as failed work, not a validated audit or zero-cost call.
