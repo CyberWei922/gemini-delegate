@@ -113,6 +113,20 @@ assert sys.stdin.readline().strip()=='/exit'
         self.assertEqual(result['status'],'set',result)
 
     @unittest.skipIf(os.name=='nt','POSIX pseudo-terminal transport')
+    def test_project_trust_prompt_is_reported_without_approval_or_model_input(self):
+        fake=self.root/'fake-tui.py';received=self.root/'unexpected-input'
+        fake.write_text('''import sys
+from pathlib import Path
+print('Do you trust the contents of this project?',flush=True)
+line=sys.stdin.readline()
+if line:Path(RECEIVED).write_text(line)
+'''.replace('RECEIVED',repr(str(received))),encoding='utf-8')
+        result=rename_conversation(str(fake),self.workspace,'test-session','中文工作名称',3,threading.Event(),lambda p:None)
+        self.assertEqual(result['status'],'requires_trust',result)
+        self.assertIn('review its trust prompt',result['reason'])
+        self.assertFalse(received.exists())
+
+    @unittest.skipIf(os.name=='nt','POSIX pseudo-terminal transport')
     def test_interactive_timeout_and_cancel_are_bounded(self):
         fake=self.root/'fake-tui.py'
         fake.write_text('import time; time.sleep(30)',encoding='utf-8')

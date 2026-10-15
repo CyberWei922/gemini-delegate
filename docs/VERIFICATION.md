@@ -1,3 +1,89 @@
+# Release verification 1.4.1
+
+Date: 2026-10-15. This release combines the retained 1.4.0 local features with
+the published 1.3.1 fixes. Historical records below are unchanged.
+
+- Local macOS: 92 runtime tests passed (4 Windows-only skips), plus 14
+  installer/protocol tests. New coverage includes two cross-process execution
+  slots, explicit serial mode, independent inputs, full-history project usage,
+  official TUI renaming and detection of its first-use project trust prompt.
+- Fresh MCP processes from both installed Codex and OpenCode bundles reported
+  1.4.1, eight tools and default concurrency 2. Their real High tasks
+  `cc64a0f9ad9f4ea1` and `d3c42587d89e4598` each returned its exact nonce/schema
+  result in one validated attempt, without retries. Process lifetimes overlapped
+  21.236 seconds; reported usage was 7,422 and 8,769 tokens (16,191 total).
+  Distinct AGY conversations belong to the actual plugin repository workspace;
+  each native record has two model steps. No task context was shared.
+- The model results succeeded, but initial native-title checks failed because
+  the official interactive UI required first-use project trust. The plugin now
+  reports `native_title.status: requires_trust` instead of waiting for a generic
+  rename timeout. It does not approve project-wide read/edit/execute permissions.
+  Successful model work is retained and not repeated just to set a title.
+- An auxiliary documentation audit `13c5768ba7924e7c` failed with a Google
+  streaming-request EOF; no retry was made. Its reported 84,889 tokens remain
+  recorded as failed work, not a validated audit or zero-cost call.
+- OpenCode configuration reload uses its official host command. Already-loaded
+  Codex stdio connections may retain an older runtime; installing the bundle or
+  testing a fresh MCP does not prove those connections refreshed. Check the
+  actual `gemini_status` version, and use the upgraded compatibility client until
+  a host-supported refresh. No application restart or fake agent record is used.
+- Windows model/runtime support from 1.3.1 is retained. Automatic native-title
+  transport is still unavailable on Windows, and authenticated Windows testing
+  of the new dual-task path has not been performed. Linux authenticated
+  inference is also not claimed. CI is simulated-service verification, not a
+  Google login or membership test; inspect the release commit's Actions result.
+
+Raw task inputs, full outputs, machine-specific receipts and account settings
+remain outside this public repository and release archive.
+
+# Release verification 1.3.1
+
+Date: 2026-10-14. Windows support is stable from this version. Real Windows
+inference used Python 3.12.10 and signed official AGY 1.3.5 on Windows build
+10.0.26200; no authenticated Windows 10 machine is claimed separately.
+
+- Runtime commit `7fb64a1ab54591ced0180537cc762198a3234087` fixes task-list
+  visibility during transient Windows reads, AGY prerequisite diagnostics and
+  installed runtime configuration in compatibility/smoke clients.
+- Local Windows: 68 runtime tests and 14 installer/protocol tests passed.
+  The original task-list race passed 60 repeated checks; cross-manager visibility
+  passed 20 repeated checks. Deterministic coverage verifies transient/persistent
+  sharing denials, privacy, bounded retries, unchanged POSIX read behavior,
+  CLI option/timeout diagnostics, stderr help output, installed custom paths,
+  process/explicit overrides and installer rejection before configuration changes.
+- All five jobs passed in [CI run 38528965549](https://github.com/CyberWei922/gemini-delegate/actions/runs/38528965549):
+  Ubuntu Python 3.9/3.12, macOS Python 3.12 and Windows Python 3.9/3.12.
+  Both Windows jobs also ran 60 local-manager and 20 cross-manager race checks.
+  CI uses simulated AGY services. Current macOS regression is verified by CI;
+  historical authenticated macOS inference remains recorded below. A new macOS
+  account/inference test was not performed in this Windows session.
+- Fresh installed MCP 1.3.1 exposed all seven tools. Connection task
+  `412a783bf3334110` completed with exactly `{"check":"GEMINI_OK"}` using
+  `gemini-3.8-flash-high`: 14.36 seconds, one validated attempt, no retry,
+  4,035 reported total tokens. The smoke client loaded installed runtime paths
+  without manually exporting the two runtime variables.
+- Installed compatibility-client file task `d7fe3a9660ff4493` processed a generated
+  public UTF-8/CRLF fixture of 32,065 bytes in two parts, with Chinese and spaces
+  in its path. It correctly extracted and deduplicated three names from the
+  beginning/middle/end. It completed in 103.75 seconds: the first answer failed
+  validation (`invalid_result`), one automatic retry succeeded. AGY reported
+  74,512 total tokens across both attempts. The original SHA-256 was unchanged;
+  manifest, input parts and temporary parameter JSON were deleted. No private
+  project files were sent to Gemini.
+- An earlier inventory task `91dee460f42c4bff`, submitted through the pre-upgrade
+  desktop connection, failed authentication/timed out; it reported zero tokens
+  and was not treated as completed work. New-package verification above used
+  a fresh 1.3.1 MCP worker. This chat retained its 1.3.0 native connection;
+  installing/updating does not prove that an already-running conversation
+  reloaded. Start a fresh conversation or use host-supported connection refresh.
+- No changes were made to the fixed High model, AGY invocation/agent policy,
+  default platform directories, POSIX process groups or Windows Job Object
+  cleanup. No paid API fallback, native external-subagent registration or
+  automatic monitor opening was added. Raw receipts, inputs/results, account
+  settings and machine-specific logs stay outside the distributed source.
+
+The records below are historical and have not been rewritten for this release.
+
 # Release verification: 1.3.0 (Windows preview)
 
 Date: 2026-10-14. Windows-specific behavior is tested in the CI matrix with

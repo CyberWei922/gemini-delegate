@@ -135,7 +135,11 @@ attempt stays independent and starts in the real project workspace, without
 ID in a ready official TUI to execute /rename and /exit; this is metadata, not
 another model turn or shared history for a different task. Read native_title
 status before claiming a native name was set; Windows currently reports
-unsupported. AGY 1.3.5 print-mode /rename is unavailable and --prompt-interactive
+unsupported. If AGY requires project trust, native_title reports requires_trust;
+do not auto-approve its project-wide read/edit/execute permission prompt. Explain
+the actual blocker and let the user review it in official AGY. Do not rerun a
+successful model task just to rename its session.
+AGY 1.3.5 print-mode /rename is unavailable and --prompt-interactive
 /rename goes to the model; neither may substitute for the native command.
 Token Monitor display/refresh still requires actual observation.
 Never change other chats' concurrency or reload them to run a local trial.

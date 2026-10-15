@@ -7,7 +7,7 @@ from host_tools import configure_stdio
 
 OBJECT = {'type':'object'}
 TASK_SCHEMA = {'type':'object','properties':{
-    'title':{'type':'string','minLength':1,'maxLength':160,'description':'Short readable work name, preferably Chinese for Chinese users. Included in task records and the AGY prompt; does not rename native provider sessions. Do not include secrets.'},
+    'title':{'type':'string','minLength':1,'maxLength':160,'description':'Short readable work name, preferably Chinese for Chinese users. Included in task records and the AGY prompt. Native title updates use the official AGY TUI where supported; inspect native_title for the actual outcome. Do not include secrets.'},
     'instruction':{'type':'string','description':'One explicit, bounded task. Keep complex planning and judgments in the primary agent.'},
     'context':{'type':'string','description':'Supplied task data; up to 48000 characters. Split independent large jobs.'},
     'workspace':{'type':'string','description':'Absolute project directory, used as AGY working directory and source-file boundary. Native AGY conversations belong to this directory.'},

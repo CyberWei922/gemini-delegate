@@ -3,12 +3,12 @@
 <p align="center">让 Gemini High 处理简单任务，让 GPT 专注规划、判断和复核。</p>
 
 <p align="center">
-  <a href="https://github.com/CyberWei922/gemini-delegate/releases"><img src="https://img.shields.io/badge/Version-1.4.0-007EC6?style=flat-square" alt="版本 1.4.0"></a>
+  <a href="https://github.com/CyberWei922/gemini-delegate/releases"><img src="https://img.shields.io/badge/Version-1.4.1-007EC6?style=flat-square" alt="版本 1.4.1"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-007EC6?style=flat-square" alt="MIT 开源协议"></a>
   <a href="AGENTS.md"><img src="https://img.shields.io/badge/Python-3.9%2B-3776AB?style=flat-square" alt="Python 3.9 及以上"></a>
-  <a href="docs/VERIFICATION.md"><img src="https://img.shields.io/badge/macOS-verified-111827?style=flat-square" alt="macOS 已实际调用验证"></a>
+  <a href="docs/VERIFICATION.md"><img src="https://img.shields.io/badge/macOS-CI%20passed-111827?style=flat-square" alt="macOS 回归测试通过，历史版本已实际调用验证"></a>
   <a href="https://github.com/CyberWei922/gemini-delegate/actions"><img src="https://img.shields.io/badge/Linux-CI%20passed-4c1?style=flat-square" alt="Linux 自动测试通过"></a>
-  <a href="docs/WINDOWS.md"><img src="https://img.shields.io/badge/Windows-Preview-007EC6?style=flat-square" alt="Windows 预览支持，真实账号待手测"></a>
+  <a href="docs/WINDOWS.md"><img src="https://img.shields.io/badge/Windows-verified-007EC6?style=flat-square" alt="Windows 正式支持，已实际调用验证"></a>
 </p>
 
 <p align="center">
@@ -20,7 +20,7 @@
 通过本机官方 Antigravity CLI（AGY），使用你自己的 Google 账号和模型额度。
 独立社区项目，由 CyberWei922 发起、AI 辅助开发，不隶属于 Google 或 OpenAI。
 
-1.4.0 默认双任务并发，按项目汇总用量，并记录中文任务名称。
+1.4.1 默认双任务并发，按项目汇总用量，并记录中文任务名称。
 AGY 在当前项目中启动，并使用官方交互命令设置原生中文会话名（macOS 已实测；Windows 自动改名待适配）。
 可显式切回单任务执行，使用方式与限制见[并发与用量说明](docs/CONCURRENCY.md)。
 
@@ -37,7 +37,7 @@ AGY 在当前项目中启动，并使用官方交互命令设置原生中文会�
 
 - macOS、Linux 或 Windows 10/11，Python 3.9+、Git、Codex CLI，以及已登录的官方 AGY。
 - `agy models` 中需要有 `gemini-3.8-flash-high`。
-- macOS 已实际调用验证；Linux 有 CI；Windows 预览支持，见[手动验收指南](docs/WINDOWS.md)。
+- macOS/Linux 跨平台回归通过；Windows 10/11 自 1.3.1 正式支持，已用官方 AGY 实际调用 Gemini High，见[验收指南](docs/WINDOWS.md)和[验证记录](docs/VERIFICATION.md)。
 
 手动命令和缺少依赖时的处理，见 [安装指南](AGENTS.md#1-准备源码与环境)。
 

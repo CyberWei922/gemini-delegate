@@ -55,7 +55,9 @@ p.write_text(json.dumps(d));print('{}')
 '''
         code=code.replace('REGISTRY',repr(str(self.registry))).replace('FAIL',repr(str(self.root/'fail')))
         self.cli.write_text('#!'+sys.executable+'\n'+code, encoding='utf-8');self.cli.chmod(0o700)
-        self.agy=self.root/'fake-agy.py';self.agy.write_text('#!'+sys.executable+'\nprint("gemini-3.8-flash-high")\n', encoding='utf-8');self.agy.chmod(0o700)
+        self.agy=self.root/'fake-agy.py'
+        self.agy.write_text('import sys\nif "--version" in sys.argv: print("1.3.5")\nelif "--help" in sys.argv: print("--print --agent --model --output-format --print-timeout --sandbox --disable-slash-commands")\nelse: print("gemini-3.8-flash-high")\n',encoding='utf-8')
+        self.agy.chmod(0o700)
         self.home_patch=mock.patch.object(Path,'home',return_value=self.home)
         self.home_patch.start();self.addCleanup(self.home_patch.stop)
         for module in (install,uninstall):
@@ -151,8 +153,43 @@ p.write_text(json.dumps(d));print('{}')
         self.assertEqual(self.settings.read_bytes(),before)
         self.assertFalse(self.target.exists())
 
+    def test_old_agy_is_rejected_before_settings_or_registration_changes(self):
+        self.agy.write_text('import sys\nprint("1.1.5" if "--version" in sys.argv else "--print --model")',encoding='utf-8')
+        before=self.settings.read_bytes()
+        with self.assertRaisesRegex(install.InstallError,'unsupported_agy_cli'):
+            self.run_install()
+        self.assertEqual(self.settings.read_bytes(),before)
+        self.assertFalse(self.target.exists())
+        self.assertEqual(json.loads(self.registry.read_text(encoding='utf-8')), {})
+
 
 class PackageTests(unittest.TestCase):
+    def test_doctor_accepts_custom_cli_paths_and_help_on_stderr(self):
+        with tempfile.TemporaryDirectory(prefix='Gemini 依赖检查 ') as directory:
+            root=Path(directory)
+            codex=root/'codex.py';codex.write_text('print("unused")',encoding='utf-8')
+            agy=root/'agy.py'
+            agy.write_text('import sys\nif "--version" in sys.argv: print("1.3.5")\nelif "--help" in sys.argv: print("--print --agent --model --output-format --print-timeout --sandbox --disable-slash-commands",file=sys.stderr)\nelse: print("gemini-3.8-flash-high")',encoding='utf-8')
+            result=subprocess.run([sys.executable,str(ROOT/'scripts/doctor.py'),'--codex',str(codex),'--agy',str(agy)],
+                                  capture_output=True,text=True,encoding='utf-8',timeout=15)
+            self.assertEqual(result.returncode,0,result.stderr)
+            report=json.loads(result.stdout)
+            self.assertTrue(report['ready_for_install'])
+            self.assertEqual(report['agy_version'],'1.3.5')
+            self.assertFalse(report['inference_tested'])
+
+    def test_doctor_missing_agy_reports_dependency_not_login(self):
+        with tempfile.TemporaryDirectory() as directory:
+            codex=Path(directory)/'codex.py';codex.write_text('print("unused")',encoding='utf-8')
+            result=subprocess.run([sys.executable,str(ROOT/'scripts/doctor.py'),'--codex',str(codex),
+                                   '--agy',str(Path(directory)/'missing-agy')],
+                                  capture_output=True,text=True,encoding='utf-8',timeout=10)
+            self.assertEqual(result.returncode,1)
+            report=json.loads(result.stdout)
+            self.assertFalse(report['agy_available'])
+            self.assertIn('Install',report['action'])
+            self.assertNotIn('sign-in',report['action'])
+
     def test_mcp_protocol_uses_utf8_despite_legacy_console_encoding(self):
         with tempfile.TemporaryDirectory(prefix='Gemini 协议 ') as directory:
             root=Path(directory)

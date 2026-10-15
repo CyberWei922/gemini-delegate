@@ -85,6 +85,12 @@ def rename_conversation(agy, workspace, conversation, title, timeout, cancel, on
                 if len(output)>2*1024*1024:
                     result['reason']='Native TUI output limit reached';break
                 plain=re.sub(r'\x1b\[[0-?]*[ -/]*[@-~]','',output.decode('utf-8','replace'))
+                if not command_sent and 'Do you trust the contents of this project?' in plain:
+                    # Trust grants project-wide read/edit/execute permissions.
+                    # A metadata rename must never approve that on its own.
+                    result.update(status='requires_trust',
+                                  reason='Official AGY requires project trust. Open agy in this workspace and review its trust prompt before retrying the native title update.')
+                    break
                 if not command_sent and '? for shortcuts' in plain:
                     # Startup prompts (-i) bypass slash dispatch in AGY 1.3.5.
                     # Only send input after the actual editor is ready.

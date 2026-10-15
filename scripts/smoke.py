@@ -11,6 +11,9 @@ import sys
 import time
 import threading
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]/'plugins/gemini-delegate/server'))
+from runtime_config import runtime_environment
+
 
 def main():
     sys.stdout.reconfigure(encoding='utf-8')
@@ -20,8 +23,11 @@ def main():
     parser.add_argument('--file-task',action='store_true',help='Verify real reading of chunked worker/test source snapshots')
     parser.add_argument('--workspace',type=Path,help='Real workspace containing the supplied plugin source files')
     parser.add_argument('--timeout',type=int,default=180)
+    parser.add_argument('--agy',help='Override the installed official AGY path')
+    parser.add_argument('--state-dir',type=Path,help='Override the installed task directory')
     args=parser.parse_args()
-    p=subprocess.Popen([sys.executable,str(args.plugin_root.resolve()/'server/main.py')],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,encoding='utf-8',bufsize=1,env={**os.environ,'PYTHONUTF8':'1'})
+    environment=runtime_environment(args.plugin_root, args.agy, args.state_dir)
+    p=subprocess.Popen([sys.executable,str(args.plugin_root.resolve()/'server/main.py')],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,encoding='utf-8',bufsize=1,env={**os.environ,**environment,'PYTHONUTF8':'1'})
     replies=queue.Queue();diagnostics=collections.deque(maxlen=40)
     def read_stdout():
         for line in p.stdout:

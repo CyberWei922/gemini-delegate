@@ -11,9 +11,40 @@ import urllib.request
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'server'))
 from dashboard import CHILDREN, LoopbackServer, ensure_dashboard, public_task, read_tasks
+import host_tools
 
 
 class DashboardTests(unittest.TestCase):
+    def test_transient_windows_read_denial_does_not_hide_remote_task(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)/'jobs'/'abcdef0123456789';root.mkdir(parents=True)
+            path=root/'progress.json'
+            path.write_text(json.dumps({'id':root.name,'status':'queued','workspace':'/project'}),encoding='utf-8')
+            original=Path.read_text
+            denials=[]
+            def read(current,*args,**kwargs):
+                if current==path and not denials:
+                    denials.append(True)
+                    raise PermissionError(13,'Temporary sharing denial')
+                return original(current,*args,**kwargs)
+            with mock.patch.object(host_tools,'WINDOWS',True),mock.patch.object(Path,'read_text',read):
+                tasks=read_tasks(d,'/project')
+            self.assertEqual([task['id'] for task in tasks],[root.name])
+            self.assertEqual(len(denials),1)
+
+    def test_persistent_read_denial_is_bounded_and_uses_metadata(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)/'jobs'/'abcdef0123456789';root.mkdir(parents=True)
+            path=root/'progress.json';path.write_text('{}',encoding='utf-8')
+            (root/'metadata.json').write_text(json.dumps({'id':root.name,'status':'completed','result':'DONE'}),encoding='utf-8')
+            original=Path.read_text
+            def read(current,*args,**kwargs):
+                if current==path:raise PermissionError(13,'Persistent denial')
+                return original(current,*args,**kwargs)
+            with mock.patch.object(host_tools,'WINDOWS',True),mock.patch.object(Path,'read_text',read):
+                tasks=read_tasks(d)
+            self.assertEqual(tasks[0]['status'],'completed')
+
     def test_loopback_binding_does_not_require_reverse_dns(self):
         from http.server import BaseHTTPRequestHandler
         with mock.patch('socket.getfqdn',side_effect=RuntimeError('DNS unavailable')):

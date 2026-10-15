@@ -363,6 +363,32 @@ class WorkflowTests(unittest.TestCase):
         self.assertNotIn('PRIVATE_CONTEXT',text)
         self.assertIn('agy_started_at',later['tasks'][0])
 
+    def test_local_task_is_visible_without_readable_snapshot(self):
+        self.worker.write_text('import time,json;time.sleep(.2);print(json.dumps({"status":"SUCCESS","response":"DONE"}))',encoding='utf-8')
+        info=self.manager.submit({'instruction':'Return DONE','context':'PRIVATE_CONTEXT','workspace':str(self.workspace)})
+        with mock.patch('dashboard.read_tasks',return_value=[]):
+            listing=self.manager.task_list(str(self.workspace))
+            self.assertEqual([task['id'] for task in listing['tasks']],[info['task_id']])
+            self.assertNotIn('PRIVATE_CONTEXT',json.dumps(listing))
+            self.assertEqual(self.manager.task_list(str(self.root))['tasks'],[])
+        self.assertEqual(self.manager.result(info['task_id'],10)['status'],'completed')
+        with mock.patch('dashboard.read_tasks',return_value=[]):
+            self.assertEqual(self.manager.task_list()['tasks'][0]['result_preview'],'"DONE"')
+
+    def test_live_task_visible_to_another_manager_during_updates(self):
+        self.worker.write_text('import time,json;time.sleep(.2);print(json.dumps({"status":"SUCCESS","response":"DONE"}))',encoding='utf-8')
+        reader=Manager(self.manager.state,str(self.worker))
+        try:
+            info=self.manager.submit({'instruction':'Return DONE','context':'PRIVATE_CONTEXT','workspace':str(self.workspace)})
+            for _ in range(10):
+                listing=reader.task_list(str(self.workspace))
+                self.assertEqual([task['id'] for task in listing['tasks']],[info['task_id']])
+                self.assertNotIn('PRIVATE_CONTEXT',json.dumps(listing))
+                time.sleep(.01)
+            self.assertEqual(self.manager.result(info['task_id'],10)['status'],'completed')
+            self.assertEqual(reader.task_list(str(self.workspace))['tasks'][0]['result_preview'],'"DONE"')
+        finally:reader.close()
+
     def test_explicit_runtime_environment_paths_are_honored(self):
         state=self.root/'custom-runtime'
         with mock.patch.dict(os.environ,{'GEMINI_DELEGATE_STATE_DIR':str(state),'GEMINI_DELEGATE_AGY':str(self.worker)}):

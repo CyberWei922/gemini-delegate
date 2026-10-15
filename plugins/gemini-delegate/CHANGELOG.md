@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.4.1 — 2026-10-15
+
+- Publish retained two-task concurrency, native project sessions/Chinese titles and project token accounting with independent model contexts.
+- Merge upstream 1.3.1 Windows visibility, AGY prerequisite checks and installed runtime configuration fixes.
+- Apply explicit/process/installed/default precedence to concurrency as well as AGY/state paths.
+- Clarify native title outcomes; Windows automatic native renaming remains unsupported.
+- Detect the official first-use project trust prompt without approving project-wide permissions or misreporting a generic timeout.
+- Local macOS: 92 runtime tests (4 Windows-only skips) and 14 installer/protocol tests passed. Live/CI scope is recorded in the repository verification document.
+
 ## 1.4.0 — 2026-10-15
 
 - Retain the validated native workspace/title, project accounting and independent context features.
