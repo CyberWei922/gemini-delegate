@@ -2,6 +2,8 @@
 
 ## 1.7.0 — 2026-10-16
 
+- Preserve the Windows job-assignment gate while forwarding binary stdin without premature close or buffered pre-reading.
+
 - Send one bounded input prompt through stdin, eliminating manifest and per-file model read rounds while preserving source snapshots and scope.
 - Parse official stream-json metadata for initialization, awaiting-model and processing; never return intermediate text or extend deadlines on progress.
 - Retain default three startup attempts and teach callers not to disable them implicitly. Only quick confirmed startup connection failures retry; interrupted/unknown work is discarded.

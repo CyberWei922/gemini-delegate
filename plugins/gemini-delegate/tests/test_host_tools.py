@@ -17,6 +17,22 @@ from worker import WorkerError, run_process
 
 
 class HostTests(unittest.TestCase):
+    def test_guarded_launcher_preserves_binary_stdin_after_gate(self):
+        payload = ('中文😀\r\n'.encode('utf-8') + bytes(range(256))) * 1000
+        result = subprocess.run([sys.executable, host_tools.__file__, '--guarded-launch-stdin',
+                                 sys.executable, '-c',
+                                 'import sys;sys.stdout.buffer.write(sys.stdin.buffer.read())'],
+                                input=b'\1'+payload, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, payload)
+
+    def test_guarded_launcher_rejects_input_without_gate(self):
+        result = subprocess.run([sys.executable, host_tools.__file__, '--guarded-launch-stdin',
+                                 sys.executable, '-c', 'print("MUST_NOT_START")'],
+                                input=b'not authorized', stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10)
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(result.stdout, b'')
+
     def test_posix_read_denial_is_not_retried(self):
         with mock.patch.object(host_tools,'WINDOWS',False),mock.patch.object(Path,'read_text',side_effect=PermissionError(13,'Denied')) as read,mock.patch.object(host_tools.time,'sleep') as sleep:
             with self.assertRaises(PermissionError):host_tools.read_text('progress.json')

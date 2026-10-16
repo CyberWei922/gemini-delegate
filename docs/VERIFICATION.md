@@ -6,7 +6,7 @@ The 25-second call/40-second total defaults and startup-only retry window are un
 
 ## Automated verification
 
-- 134 runtime tests passed on macOS (4 Windows-only skips), and 14 installer/
+- 136 runtime tests passed on macOS (4 Windows-only skips), and 14 installer/
   protocol tests passed. Public Skill frontmatter validation passed.
 - New coverage: split UTF-8 stream events, stdout/stderr limits, large pipe input
   without deadlock, phase classification, cross-process live metadata, no leaked
@@ -14,6 +14,9 @@ The 25-second call/40-second total defaults and startup-only retry window are un
   accounting and deduplication, default startup retry after init, and no replay
   after agent progress. A real subprocess emits continuous progress until the
   original fixed deadline: it is stopped and partial work is discarded.
+- Windows keeps its job-assignment launch gate and forwards the remaining stdin
+  to the target without buffered pre-reading. Binary/Unicode pipe round-trip and
+  rejection without a valid gate are covered by real subprocess tests.
 - CLI capability checks now require --input-format as well as native --json-schema.
   The locally tested 1.6.1 native-JSON changes are included in this public version.
 
