@@ -218,7 +218,7 @@ def failure_phase(attempt, error):
     """Require positive preflight evidence; silence alone is not startup."""
     usage=attempt.get('usage') or {}
     stream=attempt.get('stream_progress') or {}
-    if (stream.get('processing_started') or
+    if (error.details.get('reported_phase')=='processing' or stream.get('processing_started') or
         ((attempt.get('agy_conversation_id') or attempt.get('agy_session_id')) and not stream.get('event_count')) or
         attempt.get('response_observed') or any(isinstance(v,(int,float)) and not isinstance(v,bool) and v>0 for v in usage.values())):
         return 'processing'

@@ -19,7 +19,7 @@ at 6.29s on macOS; this is not a model turn or shared task history.
 
 ## Verification scope
 
-- 145 runtime tests passed on macOS (4 Windows-only skips), 14 installer tests.
+- 146 runtime tests passed on macOS (4 Windows-only skips), 14 installer tests.
   New coverage includes 17.53s confirmed startup recovery, insufficient remaining
   budget, slow generation failure without replay, safe failure diagnostics and
   terminal cleanup without waiting for a lingering process; success before task

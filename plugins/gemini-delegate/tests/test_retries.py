@@ -10,7 +10,7 @@ import unittest
 from unittest import mock
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'server'))
-from worker import Manager, WorkerError, decode_result
+from worker import Manager, WorkerError, decode_result, failure_phase
 from main import call
 
 
@@ -201,6 +201,11 @@ class RetryTests(unittest.TestCase):
 
 
 class FailureClassificationTests(unittest.TestCase):
+    def test_generation_failure_overrides_conflicting_no_input_metadata(self):
+        self.assertEqual(failure_phase({'task_input_sent':False},
+                         WorkerError('transient_error','Generation EOF',{'reported_phase':'processing'})),
+                         'processing')
+
     def test_startup_failure_keeps_safe_stage_without_provider_urls_or_tokens(self):
         with self.assertRaises(WorkerError) as caught:
             decode_result('', 'Eligibility check failed: GET https://private.example/?token=DO_NOT_STORE: EOF', 1)
