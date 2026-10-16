@@ -103,7 +103,7 @@ class RetryTests(unittest.TestCase):
 
     def test_slow_preflight_does_not_get_repeated(self):
         clock=[0]
-        def slow(*args):clock[0]=16;raise startup_error()
+        def slow(*args,**kwargs):clock[0]=16;raise startup_error()
         with mock.patch('worker.time.monotonic',side_effect=lambda:clock[0]),mock.patch('worker.run_process',side_effect=slow) as process:
             result=self.task()
         self.assertEqual(process.call_count,1)
@@ -127,7 +127,7 @@ class RetryTests(unittest.TestCase):
 
     def test_total_deadline_still_wins_over_remaining_attempt_count(self):
         clock=[0.0]
-        def expired(*args):
+        def expired(*args,**kwargs):
             clock[0]=40
             raise startup_error()
         with mock.patch('worker.time.monotonic',side_effect=lambda:clock[0]),mock.patch('worker.run_process',side_effect=expired) as process:

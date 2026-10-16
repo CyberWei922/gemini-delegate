@@ -166,11 +166,10 @@ class ConcurrencyTests(unittest.TestCase):
 from pathlib import Path
 sys.path.insert(0,SERVER)
 from host_tools import FileLock,atomic_replace
-if sys.argv[sys.argv.index('-p')+1].startswith('/rename '):
- print('Renamed conversation');sys.exit(0)
 counter=Path(COUNTER);gate=Path(GATE)
 assert '--continue' not in sys.argv and '--conversation' not in sys.argv
-assert '工作名称：中文任务' in sys.argv[sys.argv.index('-p')+1]
+message=json.loads(sys.stdin.readline())
+assert '工作名称：中文任务' in message['message']['content']
 def update(delta):
  with FileLock(counter.with_suffix('.lock')) as lock:
   lock.acquire(blocking=True,timeout=5)

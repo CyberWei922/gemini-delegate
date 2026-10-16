@@ -20,7 +20,7 @@ def task_usage(task):
     incomplete_attempts = 0
     for attempt in attempts:
         values = numeric_usage(attempt.get('usage'))
-        incomplete_attempts += int(not all(key in values for key in CORE_KEYS))
+        incomplete_attempts += int(bool(attempt.get('usage_is_partial')) or not all(key in values for key in CORE_KEYS))
         if values:
             known_attempts += 1
             for key, value in values.items():

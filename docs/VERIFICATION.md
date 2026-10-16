@@ -1,4 +1,118 @@
-# Release verification 1.6.0
+# Release verification 1.7.0
+
+Date: 2026-10-16. File/context/source bodies are sent in one bounded stdin prompt,
+using official single-turn AGY stream-json. Model and task history stay independent.
+The 25-second call/40-second total defaults and startup-only retry window are unchanged.
+
+## Automated verification
+
+- 136 runtime tests passed on macOS (4 Windows-only skips), and 14 installer/
+  protocol tests passed. Public Skill frontmatter validation passed.
+- New coverage: split UTF-8 stream events, stdout/stderr limits, large pipe input
+  without deadlock, phase classification, cross-process live metadata, no leaked
+  intermediate text, duplicate/malformed/truncated terminal events, partial usage
+  accounting and deduplication, default startup retry after init, and no replay
+  after agent progress. A real subprocess emits continuous progress until the
+  original fixed deadline: it is stopped and partial work is discarded.
+- Windows keeps its job-assignment launch gate and forwards the remaining stdin
+  to the target without buffered pre-reading. Binary/Unicode pipe round-trip and
+  rejection without a valid gate are covered by real subprocess tests.
+- CLI capability checks now require --input-format as well as native --json-schema.
+  The locally tested 1.6.1 native-JSON changes are included in this public version.
+
+## Actual official Gemini 3.8 Flash High checks
+
+- `dfadc163cafd4258`: Chinese deduplication/native JSON completed once in 16.53s,
+  7,176 reported tokens; official init, agent/finish and terminal events captured.
+- `111d500871ec440a`: two real input files, exact names/versions extracted once
+  in 15.16s, 8,165 reported tokens. All source contents were sent in stdin, with
+  zero required model file-read calls; five official stream events were observed.
+- `938c0a37ed2d426d`: the public MCP `smoke.py --file-task` flow completed once
+  in 15.47s, 8,282 reported tokens; both manifest entries matched, native JSON
+  and terminal events validated, and observed `file_read_steps` was zero.
+- `b0e40b7e145f403a`: two controlled local preflight EOF result events (not Google
+  failures or model calls), then one real High response. Exact STARTUP_RECOVERED
+  matched on attempt 3, total 16.03s, 7,120 reported tokens. Call caps stayed 25s;
+  backoff was 0.25/0.5s. Missing injected-attempt usage remains unknown.
+- `b6e5ff312d43436e`: larger three-script inventory still timed out after 28.05s
+  including cleanup, one attempt, no retry, no result applied. Stream init and
+  user-input receipt were observed; no model/tool execution event or terminal
+  result arrived before the deadline. Stage remained unconfirmed, not a proven
+  preflight failure. This failure is not counted as successful delegation.
+
+These checks prove the new transport, native JSON, phase evidence and startup
+recovery work; they do not prove all file tasks finish under 25s or a stable speedup.
+Google/AGY can spend a quiet interval waiting/reasoning without output events.
+Progress never renews the deadline; partial text never substitutes for success.
+
+## Installation and platform scope
+
+- Current-task versioned runtime was installed separately; existing shared Codex
+  and OpenCode 1.6.1 files/connections remain unchanged while other chats run, per
+  the user's instruction. No other chat was messaged, interrupted or restarted.
+- Shared installation update is deferred until other work finishes. Installed
+  files and native stdio connection versions must be checked separately; a new
+  compatibility client does not establish native hot reload.
+- Cross-platform CI must be checked on the actual published commit. No Windows
+  membership live test or Windows native-title transport support is asserted.
+- Machine-specific reports, task inputs, backups and credentials are excluded
+  from the public repository. Historical verification follows below.
+
+---
+
+## Historical verification — local 1.6.1 trial
+
+
+Date: 2026-10-15. JSON/edit tasks pass a private schema file to official AGY
+--json-schema and require structured_output, followed by local schema and edit
+validation. Ordinary text mode stays unchanged. Native schemas are deleted after
+execution; metadata retains only format/hash/wrapper evidence.
+
+AGY requires the schema root to be an object. Non-object or unspecified schemas
+use an internal single-value object; callers still receive the original JSON
+value. Native payload presence does not bypass local checks or source hashes.
+
+## Actual Gemini 3.8 Flash High calls on macOS
+
+- Prompt-only 1.6.0 baseline `65c72243edec44bf`: hard timeout after 29.02 seconds
+  including cleanup, one attempt, no retry, no reported usage. Partial work was
+  discarded. The task's model cap was 25 seconds and process cap 27 seconds.
+- Native-schema object task `ab8e353c76ad44f6`: completed once in 18.32 seconds,
+  no retry, 7,230 reported tokens. Exact name deduplication/count matched; both
+  native_json_schema and structured_output_reported were true.
+- Initial unconstrained-schema compatibility task `23c931e1f3104b32`: rejected
+  by CLI before inference (0.20 seconds, no retry, usage unknown). A separate
+  CLI diagnostic confirmed that schema roots must specify type object.
+- After implementing the internal wrapper, scalar task `507f28e5fbea445e`
+  completed once in 17.30 seconds, no retry, 7,024 reported tokens; its public
+  result was integer 7, with native payload evidence and wrapped_value true.
+- Edit task `4fa6f0c028ad41fd`: hard timeout after 28.64 seconds including cleanup,
+  one attempt, no retry, no reported usage. No replacements were accepted or
+  applied. Native edit staging remains covered by local fake-CLI tests; this
+  trial did not establish a successful real Gemini edit call.
+
+This small sample proves native JSON object/scalar integration, not a stable
+speedup, reduced failure rate or a solution to transport/model timeouts.
+It uses existing official AGY membership authentication, no paid API fallback.
+The 25/40-second defaults and startup-only retries remain unchanged. Native
+naming is asynchronous and its outcome is independent of model JSON validation.
+
+## Automated and installation scope
+
+- 122 runtime tests passed on macOS (4 Windows-only skips); 14 installer tests passed.
+- Local regression suites include schema-file privacy/cleanup, native object and
+  scalar values, internal-wrapper validation, mandatory native payload, local
+  rejection of invalid native values, unchanged text mode, unsupported schema
+  branches, CLI capability checks and actionable/redacted schema errors.
+- This is a local trial; no new Windows account test, remote CI run or GitHub
+  release is asserted. The previous public release verification follows below.
+- Existing native Codex MCP connections can retain older code. Fresh installed
+  compatibility calls are distinct from a host-native hot reload.
+
+---
+
+## Historical verification — 1.6.0
+
 
 Date: 2026-10-15. Only quick, positively identified startup connection failures
 are retried; mid-task and unknown-phase failures are discarded without replay.

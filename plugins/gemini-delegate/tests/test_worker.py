@@ -123,7 +123,10 @@ class WorkflowTests(unittest.TestCase):
         self.workspace=self.root/'workspace';self.workspace.mkdir()
         self.source=self.workspace/'sample.txt';self.source.write_text('old\n', encoding='utf-8')
         self.worker=self.root/'fake-agy.py'
-        self.worker.write_text('#!'+sys.executable+'\nimport json,sys\nprint(json.dumps({"status":"SUCCESS","response":json.dumps({"summary":"Changed sample","files":[{"path":"sample.txt","content":"new\\n"}]}),"usage":{"input_tokens":100,"output_tokens":20}}))\n', encoding='utf-8')
+        payload={'summary':'Changed sample','files':[{'path':'sample.txt','content':'new\n'}]}
+        envelope={'status':'SUCCESS','response':json.dumps(payload),'structured_output':payload,
+                  'usage':{'input_tokens':100,'output_tokens':20}}
+        self.worker.write_text('#!'+sys.executable+'\nimport json\nprint(json.dumps('+repr(envelope)+'))\n',encoding='utf-8')
         self.worker.chmod(0o700)
         self.manager=Manager(self.root/'state',str(self.worker),attempt_seconds=2,max_concurrency=1)
 
@@ -228,37 +231,29 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(result['attempts'][0]['failure_phase'],'processing')
         self.assertIsNone(result['result'])
 
-    def test_file_snapshots_are_lossless_bounded_and_cleaned_on_timeout(self):
+    def test_file_input_is_lossless_in_single_stdin_prompt_and_not_argv(self):
         original=('一段原始代码\n' * 2500 + '无换行😀' * 3500).encode('utf-8')
         self.source.write_bytes(original)
         self.manager.attempt_seconds=None
-        def inspect(argv,cwd,*args):
+        def inspect(argv,cwd,*args,**kwargs):
             self.assertEqual(Path(cwd),self.workspace.resolve())
-            # Input snapshots stay private; the CLI itself starts in the project.
+            self.assertNotIn('-p',argv)
+            message=json.loads(kwargs['input_data'])
+            self.assertEqual(message['event'],'user')
+            prompt=message['message']['content']
+            self.assertIn(original.decode('utf-8'),prompt)
+            self.assertIn(digest(original),prompt)
+            self.assertIn('sample.txt',prompt)
+            self.assertNotIn(original.decode('utf-8')[:30], ' '.join(argv))
             root=next((self.manager.state/'jobs').iterdir())
-            manifest=json.loads((root/'input.json').read_text(encoding='utf-8'))
-            self.assertGreater(len((root/'input.json').read_text(encoding='utf-8').splitlines()),1)
-            self.assertNotIn('content',manifest['files'][0])
-            self.assertLessEqual((root/'input.json').stat().st_size,INPUT_CHUNK_BYTES)
-            parts=manifest['files'][0]['parts']
-            self.assertGreater(len(parts),1)
-            restored=b''
-            for item in parts:
-                path=root/item['file'];body=path.read_bytes()
-                self.assertEqual(item['byte_offset'],len(restored))
-                self.assertLessEqual(len(body),INPUT_CHUNK_BYTES)
-                self.assertEqual(body.decode('utf-8').encode('utf-8'),body)
-                if not WINDOWS:self.assertEqual(path.stat().st_mode & 0o777,0o600)
-                self.assertEqual(item['sha256'],digest(body))
-                restored+=body
-            self.assertEqual(restored,original)
+            self.assertFalse((root/'input.json').exists())
+            self.assertFalse((root/'inputs').exists())
             raise WorkerError('timeout','deadline')
         with mock.patch('worker.run_process',side_effect=inspect):
             jid=self.manager.submit({'instruction':'Read the file','workspace':str(self.workspace),'input_files':['sample.txt'],'timeout_seconds':15})['task_id']
             result=self.manager.result(jid,10)
         self.assertEqual(result['error']['code'],'timeout',result)
-        self.assertFalse((self.manager.state/'jobs'/jid/'inputs').exists())
-        self.assertFalse((self.manager.state/'jobs'/jid/'input.json').exists())
+        self.assertEqual(result['input_transport']['required_file_reads'],0)
         self.assertEqual(self.source.read_bytes(),original)
 
     def test_empty_and_unicode_text_chunks_round_trip(self):

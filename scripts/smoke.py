@@ -21,7 +21,7 @@ def main():
     sys.stderr.reconfigure(encoding='utf-8')
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--plugin-root',type=Path,default=Path(__file__).resolve().parents[1]/'plugins/gemini-delegate')
-    parser.add_argument('--file-task',action='store_true',help='Verify real reading of chunked worker/test source snapshots')
+    parser.add_argument('--file-task',action='store_true',help='Verify two real plugin manifests delivered in one stdin prompt')
     parser.add_argument('--workspace',type=Path,help='Real workspace containing the supplied plugin source files')
     parser.add_argument('--timeout',type=int,default=DEFAULT_TIMEOUT_SECONDS)
     parser.add_argument('--attempt-timeout',type=int,help='Explicit fixed per-call cap for longer file checks')
@@ -70,21 +70,15 @@ def main():
         if args.attempt_timeout is not None:task['attempt_timeout_seconds']=args.attempt_timeout
         expected={'check':'GEMINI_OK'}
         if args.file_task:
-            fields={'model':{'type':'string'},'chunk_bytes':{'type':'integer'},'default_attempt_cap':{'type':'string'},'retry_error_codes':{'type':'array','items':{'type':'string'}},'test_name':{'type':'string'}}
-            instruction=(
-                '只读完成源码提取，不运行测试、不编辑文件、不联网、不制定方案。'
-                '读取索引及所列文件的所有文本块，从 worker.py 提取 MODEL 字符串、'
-                'INPUT_CHUNK_BYTES 整数、Manager.__init__ 的 attempt_seconds 默认值'
-                '（None 写成字符串 none）、RETRYABLE_CODES 的全部错误代码'
-                '（保持源码元组顺序）；从 test_worker.py 提取证明单次模式超时不重复重试的测试函数名。'
-                '只返回 JSON，字段依次为 model、chunk_bytes、default_attempt_cap、'
-                'retry_error_codes、test_name。不要输出分析。')
-            task.update(title='修复后真实文件读取检查',instruction=instruction,
-                        input_files=[str(args.plugin_root.resolve()/'server/worker.py'),
-                                     str(args.plugin_root.resolve()/'tests/test_worker.py')],
-                        result_schema={'type':'object','properties':fields,'required':list(fields),
-                                       'additionalProperties':False})
-            expected={'model':'gemini-3.8-flash-high','chunk_bytes':24576,'default_attempt_cap':'none','retry_error_codes':['timeout','transient_error'],'test_name':'test_single_attempt_timeout_does_not_retry'}
+            files=[args.plugin_root.resolve()/'plugin.json',args.plugin_root.resolve()/'.codex-plugin/plugin.json']
+            item={'type':'object','properties':{'name':{'type':'string'},'version':{'type':'string'}},
+                  'required':['name','version'],'additionalProperties':False}
+            task.update(title='真实双文件一次性输入检查',
+                        instruction='只读提取所提供两份 manifest 的 name 和 version，按文件顺序返回 entries 数组。内容已在提示中，无需再读取文件，不运行工具、不编辑文件、不联网。',
+                        input_files=[str(path) for path in files],
+                        result_schema={'type':'object','properties':{'entries':{'type':'array','items':item,'minItems':2,'maxItems':2}},
+                                       'required':['entries'],'additionalProperties':False})
+            expected={'entries':[{key:json.loads(path.read_text(encoding='utf-8'))[key] for key in ('name','version')} for path in files]}
         job=tool('delegate_task',task)
         print(json.dumps({'phase':'submitted','task_id':job['task_id'],'model':job['model']}),flush=True)
         while True:
@@ -92,7 +86,7 @@ def main():
             if r['status'] in ('completed','failed','cancelled'):
                 if r['status']!='completed':raise RuntimeError(r.get('error',{}))
                 assert r['result']==expected,r['result']
-                print(json.dumps({'passed':True,'version':init['serverInfo']['version'],'tools':tools,'task_id':r['id'],'model':r['model'],'seconds':r['elapsed_seconds'],'input_parts':r.get('input_parts',0),'attempts':r['attempts'],'usage':r['usage'],'result':r['result']},ensure_ascii=False),flush=True)
+                print(json.dumps({'passed':True,'version':init['serverInfo']['version'],'tools':tools,'task_id':r['id'],'model':r['model'],'seconds':r['elapsed_seconds'],'input_transport':r.get('input_transport'),'progress':r.get('progress'),'attempts':r['attempts'],'usage':r['usage'],'result':r['result']},ensure_ascii=False),flush=True)
                 return
             print(json.dumps({'status':r['status']}),flush=True)
     finally:

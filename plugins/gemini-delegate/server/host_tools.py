@@ -275,13 +275,17 @@ def managed_process(argv, **kwargs):
     kwargs.setdefault('env', {**os.environ, 'PYTHONUTF8':'1'})
     job = None
     if WINDOWS:
+        forward_stdin = kwargs.get('stdin') == subprocess.PIPE
         kwargs['creationflags'] = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
         kwargs['stdin'] = subprocess.PIPE
-        launcher = [sys.executable, str(Path(__file__).resolve()), '--guarded-launch', *argv]
+        mode = '--guarded-launch-stdin' if forward_stdin else '--guarded-launch'
+        launcher = [sys.executable, str(Path(__file__).resolve()), mode, *argv]
         proc = subprocess.Popen(launcher, **kwargs)
         try:
             job = WindowsJob(); job.assign(proc.pid); proc._delegate_job = job
-            proc.stdin.write(b'\1'); proc.stdin.flush(); proc.stdin.close(); proc.stdin = None
+            proc.stdin.write(b'\1'); proc.stdin.flush()
+            if not forward_stdin:
+                proc.stdin.close(); proc.stdin = None
         except BaseException:
             try:
                 if job:
@@ -329,7 +333,16 @@ def detached_flags():
 
 
 if __name__ == '__main__':
-    if sys.argv[1:2] != ['--guarded-launch'] or sys.stdin.buffer.read(1) != b'\1':
+    mode = sys.argv[1:2]
+    if mode not in (['--guarded-launch'], ['--guarded-launch-stdin']):
         raise SystemExit(2)
-    child = subprocess.Popen(command_argv(sys.argv[2:]), stdin=subprocess.DEVNULL)
+    if WINDOWS:
+        import msvcrt
+        msvcrt.setmode(sys.stdin.fileno(), os.O_BINARY)
+    # Buffered reads may consume task bytes beyond the gate before the child
+    # inherits the pipe. Read exactly the gate byte from the raw descriptor.
+    if os.read(sys.stdin.fileno(), 1) != b'\1':
+        raise SystemExit(2)
+    child = subprocess.Popen(command_argv(sys.argv[2:]),
+                             stdin=sys.stdin.buffer if mode == ['--guarded-launch-stdin'] else subprocess.DEVNULL)
     raise SystemExit(child.wait())

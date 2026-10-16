@@ -35,8 +35,16 @@ class RuntimeConfigTests(unittest.TestCase):
             self.env.pop(key,None)
 
     def make_agy(self,path,value):
-        path.write_text('import json\nprint(json.dumps('+repr({'status':'SUCCESS','response':json.dumps({'check':value})})+'))\n',encoding='utf-8')
-        path.chmod(0o700)
+        program = """import json,sys
+from pathlib import Path
+value={'check':VALUE}
+native=value
+if '--json-schema' in sys.argv:
+ schema=json.loads(Path(sys.argv[sys.argv.index('--json-schema')+1]).read_text(encoding='utf-8'))
+ if schema.get('properties')=={'value':{}}:native={'value':value}
+print(json.dumps({'status':'SUCCESS','response':json.dumps(value),'structured_output':native}))
+""".replace('VALUE',repr(value))
+        path.write_text(program,encoding='utf-8');path.chmod(0o700)
 
     def write_manifest(self,environment,name='mcp.json'):
         (self.plugin/name).write_text(json.dumps({'mcpServers':{'gemini-delegate':{'env':environment}}}),encoding='utf-8-sig')
@@ -115,7 +123,7 @@ p=Path(COUNTER);count=int(p.read_text())+1 if p.exists() else 1;p.write_text(str
 if count<3:
  print(json.dumps({'status':'ERROR','error':'Eligibility check failed: userinfo request: EOF'}))
  raise SystemExit(1)
-print(json.dumps({'status':'SUCCESS','response':'{"check":"GEMINI_OK"}'}))
+print(json.dumps({'status':'SUCCESS','response':'{"check":"GEMINI_OK"}','structured_output':{'check':'GEMINI_OK'}}))
 '''.replace('COUNTER',repr(str(counter))),encoding='utf-8')
         result=subprocess.run([sys.executable,str(REPO/'scripts/smoke.py'),'--plugin-root',str(self.plugin),'--workspace',str(self.root),'--timeout','30'],env=self.env,capture_output=True,text=True,encoding='utf-8',timeout=20)
         self.assertEqual(result.returncode,0,result.stderr+'\n'+result.stdout)

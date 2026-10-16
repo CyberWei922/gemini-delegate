@@ -33,7 +33,7 @@ def public_task(data):
             'status', 'model', 'workspace', 'created_at', 'agy_slot', 'agy_working_directory', 'native_title',
             'started_at', 'agy_started_at', 'finished_at', 'updated_at',
             'elapsed_seconds', 'input_parts', 'attempts', 'usage', 'error', 'applied_at', 'retry_policy', 'handoff',
-            'owner_pid', 'result_preview', 'result_truncated')
+            'owner_pid', 'result_preview', 'result_truncated', 'output_contract', 'input_transport', 'progress')
     task = {k: data[k] for k in keys if k in data}
     task.setdefault('title', '历史任务 · ' + str(data.get('id', '')))
     task.setdefault('project_name', Path(task.get('workspace') or '').name or '未指定项目')
