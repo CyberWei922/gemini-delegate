@@ -1,3 +1,58 @@
+# Release verification 1.7.1
+
+Date: 2026-10-16. Incident `8fb7cd8c60f947f0` used 1.7.0 and failed before inference
+at 17.53s. Positive preflight evidence was recorded, but the separate 15s retry
+cutoff wrongly disabled recovery. 1.7.1 removes this elapsed-time cutoff while
+keeping the original total deadline, fixed call cap, independent contexts and
+no replay for processing/unknown failures.
+
+The transport also no longer waits for process-pipe EOF after a complete terminal
+message. Lingering real subprocess tests cover completed success, terminal error
+and a success envelope carrying a partial-output warning; only validated complete
+results can be accepted. Progress now includes terminal SUCCESS/ERROR.
+
+Initialization is now gated: no task bytes are sent until official init arrives.
+If init is still absent at 10s, the process is stopped and can retry with positive
+proof that the model never received the task. The 10s startup gate consumes the
+same 25s call / 40s total budgets. Actual no-input AGY 1.4.0 readiness was observed
+at 6.29s on macOS; this is not a model turn or shared task history.
+
+## Verification scope
+
+- 144 runtime tests passed on macOS (4 Windows-only skips), 14 installer tests.
+  New coverage includes 17.53s confirmed startup recovery, insufficient remaining
+  budget, slow generation failure without replay, safe failure diagnostics and
+  terminal cleanup without waiting for a lingering process.
+- Real official Gemini High extractions from three keyboard-related source files:
+  `5bd41fc06f2b486d` 22.48s, `d53b8b6a98474be9` 21.59s and
+  `56acf3407bc6467a` 19.22s. Each completed once and the full ordered function-name
+  list matched local source extraction. The latter two used the final terminal
+  cleanup path and recorded terminal SUCCESS.
+- Larger 19,956-byte three-file request `1594def42d0d4565` failed at 27.89s;
+  no partial output was used. Single-file extraction before the terminal cleanup
+  fix, `9a0ce0c4fd554858`, also timed out and was not counted as success.
+- Controlled 17.53s local preflight injection `93fdccb7687d4eb6` correctly retried
+  the real High call, then exhausted its original 40s budget. It proves the retry
+  branch, not successful recovery. Its first failure was simulated, not Google.
+
+- Plain-text file extraction `d68fa0540079410d` completed once in 18.41s and
+  exactly matched the source. Simple copied facts need not use native JSON.
+- Before gating, the plain-text delayed-startup trial `278b2e9903564ee5` also
+  exhausted the original budget and was not counted as success.
+- Final gated recovery `80cd682356ea42b6`: the controlled local 17.53s startup
+  stall was stopped at 10.01s with task_input_sent=false. The second attempt
+  was real official Gemini High; task_input_sent=true, terminal SUCCESS, exact
+  source function list matched, 28.54s total. Limits stayed 25s/40s, two attempts.
+  The injected stall was not an actual Google failure. No GPT agent did the work.
+
+These are bounded evidence, not a guarantee of provider latency. The calling
+instructions now keep source-fact collection narrow, split independent files,
+and retain regression planning in the primary agent. No task deadline increased.
+
+---
+
+## Historical verification — 1.7.0
+
 # Release verification 1.7.0
 
 Date: 2026-10-16. File/context/source bodies are sent in one bounded stdin prompt,

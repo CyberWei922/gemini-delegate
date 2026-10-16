@@ -168,6 +168,7 @@ sys.path.insert(0,SERVER)
 from host_tools import FileLock,atomic_replace
 counter=Path(COUNTER);gate=Path(GATE)
 assert '--continue' not in sys.argv and '--conversation' not in sys.argv
+print(json.dumps({'event':'init','conversation_id':'ready'}),flush=True)
 message=json.loads(sys.stdin.readline())
 assert '工作名称：中文任务' in message['message']['content']
 def update(delta):
@@ -181,7 +182,7 @@ deadline=time.monotonic()+8
 while not gate.exists() and time.monotonic()<deadline:time.sleep(.02)
 time.sleep(.1)
 update(-1)
-print(json.dumps({'status':'SUCCESS','response':'OK','conversation_id':str(uuid.uuid4()),'usage':{'input_tokens':10,'output_tokens':2,'total_tokens':12}}))
+print(json.dumps({'event':'result','result':{'status':'SUCCESS','response':'OK','conversation_id':str(uuid.uuid4()),'usage':{'input_tokens':10,'output_tokens':2,'total_tokens':12}}}))
 '''.replace('SERVER',repr(str(server))).replace('COUNTER',repr(str(counter))).replace('GATE',repr(str(gate))),encoding='utf-8')
             helper = root/'helper.py'
             helper.write_text('''import json,sys

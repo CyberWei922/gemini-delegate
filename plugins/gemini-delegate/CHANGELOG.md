@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.7.1 — 2026-10-16
+
+- Withhold task input until official init; a 10s pre-input gate makes stalled startup safely retryable without replaying model work.
+
+- Retry positively identified pre-inference network failures even after 15 seconds, within the unchanged shared 40-second budget and fixed 25-second call cap.
+- Preserve discard-only handling for processing/unknown failures; record safe failure stage/kind without provider URLs or credentials.
+- Regress the observed 17.53-second startup failure, insufficient remaining budget, and generation interruption.
+- Complete the transport on a terminal protocol result instead of waiting for lingering process pipes; still reject error/partial results and expose terminal status.
+- Guide narrow independent file extractions rather than large short-deadline bundles or delegated regression planning.
+
 ## 1.7.0 — 2026-10-16
 
 - Preserve the Windows job-assignment gate while forwarding binary stdin without premature close or buffered pre-reading.

@@ -27,6 +27,21 @@ Respect dedicated artifact skills (images, spreadsheets, documents, etc.); this
 worker assists their bounded preparation rather than substituting their required
 tools or verification workflows.
 
+Keep short-deadline work to fact extraction. A regression plan, architectural
+review or correctness decision belongs to the primary agent; delegate only its
+independent source-fact collection. For file inventories, submit one small file
+per task and use the two available slots for independent calls. Do not put a
+20 KiB multi-file bundle into one default 25-second call. For large files, use a
+deterministically selected, explicitly identified excerpt as context when the
+requested facts are fully covered; never silently truncate or claim a full-file
+review from excerpts. Prefer names/quoted facts over unnecessary counting or
+open-ended analysis. A narrow successful source extraction is not proof that a
+larger request is safe to batch. Do not reuse an installation echo check as a
+business-task reliability claim.
+Use ordinary text for short copied lists or source facts when exact line/value
+checks are sufficient. Reserve native JSON for a required structured contract or
+edits; do not force every small fact-extraction task through structured output.
+
 ## Execute
 
 Default to visible, asynchronous plugin cooperation when there is useful
@@ -98,7 +113,9 @@ worker and evidence trail, not a different model or paid API fallback.
      Leave max_attempts unset to retain startup recovery. Do not send 1 merely
      because mid-task retries are forbidden: 1 disables startup retries too.
      Use 1 only when the user explicitly requests no retries.
-     Only confirmed transient startup failures within 15 seconds can retry.
+     Only positively confirmed transient pre-inference startup failures can retry,
+     while the original total budget has enough time remaining. Startup duration
+     alone never disables recovery.
      Mid-task failures and unknown phases stop immediately without replay.
      Explicitly set both timeout_seconds and attempt_timeout_seconds for genuinely
      longer background work; do not automatically extend simple tasks to minutes.
@@ -153,7 +170,12 @@ Token Monitor display/refresh still requires actual observation.
 Never change other chats' concurrency or reload them to run a local trial.
 
 The worker retries only recognized temporary connection failures confirmed to be
-in startup and returned within 15 seconds. Default limits are three total attempts,
+before inference, while the original budget still has time for another attempt.
+The worker withholds all task bytes until official init. A 10-second pre-input
+startup gate can stop/retry a stall with task_input_sent=false, rather than guess
+from silence after submitting work. Init/input echo still is not model completion.
+There is no separate 15-second cutoff for a positively identified startup error.
+Default limits are three total attempts,
 25 seconds per call, 40 seconds overall; backoff is 0.25 then 0.5 seconds and releases
 model slots. Silence is not evidence that model work has not started: An init or user_input event
 confirms only setup/submission; awaiting_model is not proof of model execution.
