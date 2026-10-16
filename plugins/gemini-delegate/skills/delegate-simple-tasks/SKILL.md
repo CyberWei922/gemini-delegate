@@ -158,8 +158,9 @@ in startup and returned within 15 seconds. Default limits are three total attemp
 model slots. Silence is not evidence that model work has not started: An init or user_input event
 confirms only setup/submission; awaiting_model is not proof of model execution.
 Official stream-json agent/tool events identify processing. Progress never extends
-the original deadline. Intermediate text is not a completed result or main-agent context. If there is response/usage/session evidence, or the
-phase cannot be confirmed, discard the failed work and hand off without replay.
+the original deadline. Intermediate text is not a completed result or main-agent context.
+If there is model/tool progress, response or usage evidence, or the failure phase
+cannot be confirmed, discard the failed work and hand off without replay.
 Empty results, schema errors and mid-task timeouts do not trigger automatic retries.
 Do not cancel a retrying task or submit a duplicate while its status is
 retrying/running/waiting_for_agy. Continue independent work and poll the same ID
