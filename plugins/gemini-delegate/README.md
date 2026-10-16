@@ -13,7 +13,7 @@ instructions, not a forced routing hook or native Gemini subagent registration.
 Runtime requirements: macOS/Linux or Windows 10/11, Python 3.9+, authenticated official AGY and
 the exact `gemini-3.8-flash-high` model. No third-party Python dependencies.
 The worker fixes this High model and invokes AGY with bounded print mode, JSON
-output, sandbox hints and an isolated worker agent. AGY defaults to two
+streaming output, sandbox hints and an isolated worker agent. AGY defaults to two
 independent concurrent calls; explicit concurrency 1 selects serial execution. Calls are stopped as a process tree on cancellation/hard timeout (POSIX
 process groups; Windows Job Objects with a gated launcher). A
 confirmed startup connection failure within 15 seconds can retry, up to three total
@@ -21,7 +21,10 @@ attempts by default. Mid-task interruptions, unconfirmed phases, empty/invalid o
 and account/permission/quota failures stop without replaying generated work.
 Partial results are discarded and terminal failures expose handoff to the primary agent.
 The wrapper rejects soft-denied, empty or partial-timeout success envelopes and
-validates structured results.
+validates structured results. JSON/edit tasks pass a private schema file to the official
+`--json-schema` option and require native `structured_output`; ordinary text is unchanged.
+Schemas are removed after execution. Native output still undergoes local schema and
+edit-scope validation; missing native payload is a failure, without text fallback.
 
 The default total execution budget is 40 seconds and each call is capped at 25 seconds.
 There is no escalating timeout. Retrieval, shared-slot waiting, backoff and all attempts
@@ -80,9 +83,24 @@ its persistent process, read the PID from the private runtime `dashboard.json`,
 verify it belongs to `server/dashboard.py`, then terminate that specific process.
 Do not publish the monitor URL. No arbitrary filesystem endpoint is provided.
 
-Input bundles are deleted after each execution. Task metadata/results, evidence
-hashes, candidates and backups remain private on disk. Google/AGY retention is
-independent. Missing usage means unknown. Uninstall deliberately retains work.
+Input files are snapshotted in memory and delivered together in one bounded UTF-8
+prompt through stdin, without shell interpolation, command-line bodies, manifest
+reads or model file-read rounds. The official --input-format/--output-format
+stream-json protocol is used for one fresh turn per task; stdin closes after that
+single input. No history is reused. Private JSON schema files are removed after
+execution. Results/backups and bounded progress metadata stay private on disk.
+
+Progress distinguishes startup, awaiting_model and processing; only official
+agent/tool steps count as processing. It reports event/step counts and times,
+not intermediate text, thought content, source bodies or tool parameters.
+No progress resets/extends the 25-second call cap or 40-second total default.
+A terminal result is required; a disconnected partial stream is discarded.
+Reported step usage from interrupted calls is partial, counted once and explicitly
+incomplete; terminal usage replaces the step subtotal for completed calls.
+Leave max_attempts unset (default 3) to retain startup recovery; use 1 only when
+no retries were explicitly requested. Init/input echoes alone cannot make a
+silent hard timeout eligible for replay. Google/AGY retention is independent.
+Uninstall deliberately retains work.
 
 `usage_summary` reads all recorded tasks, including records beyond the 200-row
 task-list limit, and counts retries once. Compact totals are the default;
@@ -90,8 +108,8 @@ task-list limit, and counts retries once. Compact totals are the default;
 conversation ID mappings when AGY reports them. CLI exports include these details
 and refuse to overwrite existing files. Thinking/cache fields are reported
 separately and never added again to total_tokens. Every model attempt uses a
-fresh `agy -p` call in the real project directory, without history continuation.
-Input snapshots remain in private per-task directories. The restricted worker
+fresh one-turn AGY stream-json call in the real project directory, without history continuation.
+Input snapshots are private in-memory values passed once through stdin. The restricted worker
 is discovered through official `~/.gemini/config/agents/`; conflicting user
 definitions are preserved and reported.
 

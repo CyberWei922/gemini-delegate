@@ -55,6 +55,12 @@ class PrerequisiteTests(unittest.TestCase):
         self.assertEqual(calls,['--version','--help'])
         self.assertIsNone(report['models_command_succeeded'])
 
+    def test_native_json_schema_support_is_required_before_installing(self):
+        report,calls=self.probe(help_text=' '.join(f for f in agy_check.REQUIRED_FLAGS if f!='--json-schema'))
+        self.assertEqual(report['diagnostic_code'],'unsupported_agy_cli')
+        self.assertEqual(report['missing_agy_flags'],['--json-schema'])
+        self.assertEqual(calls,['--version','--help'])
+
     def test_model_timeout_is_distinct_from_login_failure(self):
         report,_=self.probe(models=subprocess.TimeoutExpired('agy models',30))
         self.assertEqual(report['diagnostic_code'],'agy_check_timeout')

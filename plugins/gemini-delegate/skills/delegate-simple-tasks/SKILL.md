@@ -89,12 +89,15 @@ worker and evidence trail, not a different model or paid API fallback.
      schema when field names/counts matter. Set minItems=maxItems for exact batch
      coverage. Supported schema keywords are described by the tool.
    - Local files: supply `workspace` and explicit `input_files`. The plugin
-     reads those files and gives the worker a small manifest with lossless,
-     bounded UTF-8 text parts. Keep tasks narrow and request concise output;
+     snapshots those files and sends their UTF-8 contents once through stdin.
+     The model does not need manifest or per-file read calls. Keep tasks narrow and request concise output;
      split large batches into small independent tasks.
    - `timeout_seconds` bounds retrieval, shared-slot waiting and all attempts once
      execution starts: default 40 seconds, fixed per-call cap 25 seconds, no
      escalating budgets. `max_attempts` accepts 1–5 (default 3; 1 disables retries).
+     Leave max_attempts unset to retain startup recovery. Do not send 1 merely
+     because mid-task retries are forbidden: 1 disables startup retries too.
+     Use 1 only when the user explicitly requests no retries.
      Only confirmed transient startup failures within 15 seconds can retry.
      Mid-task failures and unknown phases stop immediately without replay.
      Explicitly set both timeout_seconds and attempt_timeout_seconds for genuinely
@@ -103,6 +106,8 @@ worker and evidence trail, not a different model or paid API fallback.
      public pages through a read-only adapter. Search uses the user's existing
      Agent Reach/Exa backend. It neither changes global AGY web permissions nor
      bypasses access controls or logged-in/private page restrictions.
+   - JSON/edit output uses native AGY JSON schema plus local validation. Missing
+     native structured_output fails closed; partial stream text cannot substitute.
    - Mechanical edits: use `response_type: edit` and explicit input files.
      Gemini returns replacements; originals remain unchanged until application.
 3. Read `get_task_result`. Do independent work while it runs; wait at most 20
@@ -150,8 +155,10 @@ Never change other chats' concurrency or reload them to run a local trial.
 The worker retries only recognized temporary connection failures confirmed to be
 in startup and returned within 15 seconds. Default limits are three total attempts,
 25 seconds per call, 40 seconds overall; backoff is 0.25 then 0.5 seconds and releases
-model slots. Silence is not evidence that model work has not started: AGY JSON mode
-may buffer until completion. If there is response/usage/session evidence, or the
+model slots. Silence is not evidence that model work has not started: An init or user_input event
+confirms only setup/submission; awaiting_model is not proof of model execution.
+Official stream-json agent/tool events identify processing. Progress never extends
+the original deadline. Intermediate text is not a completed result or main-agent context. If there is response/usage/session evidence, or the
 phase cannot be confirmed, discard the failed work and hand off without replay.
 Empty results, schema errors and mid-task timeouts do not trigger automatic retries.
 Do not cancel a retrying task or submit a duplicate while its status is

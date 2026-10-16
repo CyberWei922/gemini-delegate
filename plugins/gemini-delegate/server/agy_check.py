@@ -6,7 +6,7 @@ from host_tools import command_argv, run_command
 
 MODEL = 'gemini-3.8-flash-high'
 REQUIRED_FLAGS = ('--print', '--agent', '--model', '--output-format',
-                  '--print-timeout', '--sandbox', '--disable-slash-commands')
+                  '--print-timeout', '--sandbox', '--disable-slash-commands', '--json-schema', '--input-format')
 
 
 def probe_agy(agy, check_models=True, timeout=30):

@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.7.0 — 2026-10-16
+
+- Send one bounded input prompt through stdin, eliminating manifest and per-file model read rounds while preserving source snapshots and scope.
+- Parse official stream-json metadata for initialization, awaiting-model and processing; never return intermediate text or extend deadlines on progress.
+- Retain default three startup attempts and teach callers not to disable them implicitly. Only quick confirmed startup connection failures retry; interrupted/unknown work is discarded.
+- Keep 25-second call and 40-second total defaults. Account observed partial step usage once and mark it incomplete; terminal usage is not double-counted.
+- Include the locally tested 1.6.1 native JSON integration. Live results and verification limits are recorded in the repository verification document.
+
+## 1.6.1 — 2026-10-15 (local trial)
+
+- JSON/edit tasks use official AGY --json-schema through a private temporary file.
+- Require native structured_output and retain local schema/edit validation; no plain-text fallback. Record native-format evidence, not schema contents, and delete schema files after execution.
+- Check CLI schema capability before installation; retain short deadlines and startup-only retries.
+- Live verification and scope are recorded in the repository verification document.
+
 ## 1.6.0 — 2026-10-15
 
 - Default to a 25-second fixed call cap and 40-second total execution budget.

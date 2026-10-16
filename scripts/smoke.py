@@ -92,7 +92,7 @@ def main():
             if r['status'] in ('completed','failed','cancelled'):
                 if r['status']!='completed':raise RuntimeError(r.get('error',{}))
                 assert r['result']==expected,r['result']
-                print(json.dumps({'passed':True,'version':init['serverInfo']['version'],'tools':tools,'task_id':r['id'],'model':r['model'],'seconds':r['elapsed_seconds'],'input_parts':r.get('input_parts',0),'attempts':r['attempts'],'usage':r['usage'],'result':r['result']},ensure_ascii=False),flush=True)
+                print(json.dumps({'passed':True,'version':init['serverInfo']['version'],'tools':tools,'task_id':r['id'],'model':r['model'],'seconds':r['elapsed_seconds'],'input_transport':r.get('input_transport'),'progress':r.get('progress'),'attempts':r['attempts'],'usage':r['usage'],'result':r['result']},ensure_ascii=False),flush=True)
                 return
             print(json.dumps({'status':r['status']}),flush=True)
     finally:

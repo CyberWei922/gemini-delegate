@@ -56,7 +56,7 @@ p.write_text(json.dumps(d));print('{}')
         code=code.replace('REGISTRY',repr(str(self.registry))).replace('FAIL',repr(str(self.root/'fail')))
         self.cli.write_text('#!'+sys.executable+'\n'+code, encoding='utf-8');self.cli.chmod(0o700)
         self.agy=self.root/'fake-agy.py'
-        self.agy.write_text('import sys\nif "--version" in sys.argv: print("1.3.5")\nelif "--help" in sys.argv: print("--print --agent --model --output-format --print-timeout --sandbox --disable-slash-commands")\nelse: print("gemini-3.8-flash-high")\n',encoding='utf-8')
+        self.agy.write_text('import sys\nif "--version" in sys.argv: print("1.3.5")\nelif "--help" in sys.argv: print("--print --agent --model --output-format --print-timeout --sandbox --disable-slash-commands --json-schema --input-format")\nelse: print("gemini-3.8-flash-high")\n',encoding='utf-8')
         self.agy.chmod(0o700)
         self.home_patch=mock.patch.object(Path,'home',return_value=self.home)
         self.home_patch.start();self.addCleanup(self.home_patch.stop)
@@ -169,7 +169,7 @@ class PackageTests(unittest.TestCase):
             root=Path(directory)
             codex=root/'codex.py';codex.write_text('print("unused")',encoding='utf-8')
             agy=root/'agy.py'
-            agy.write_text('import sys\nif "--version" in sys.argv: print("1.3.5")\nelif "--help" in sys.argv: print("--print --agent --model --output-format --print-timeout --sandbox --disable-slash-commands",file=sys.stderr)\nelse: print("gemini-3.8-flash-high")',encoding='utf-8')
+            agy.write_text('import sys\nif "--version" in sys.argv: print("1.3.5")\nelif "--help" in sys.argv: print("--print --agent --model --output-format --print-timeout --sandbox --disable-slash-commands --json-schema --input-format",file=sys.stderr)\nelse: print("gemini-3.8-flash-high")',encoding='utf-8')
             result=subprocess.run([sys.executable,str(ROOT/'scripts/doctor.py'),'--codex',str(codex),'--agy',str(agy)],
                                   capture_output=True,text=True,encoding='utf-8',timeout=15)
             self.assertEqual(result.returncode,0,result.stderr)

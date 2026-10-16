@@ -82,7 +82,8 @@ def run():
                 if result['status'] != 'completed':
                     raise SystemExit(1)
                 return
-            print(json.dumps({'task_id':submitted['task_id'],'status':result['status']},ensure_ascii=False),flush=True)
+            print(json.dumps({'task_id':submitted['task_id'],'status':result['status'],
+                              'progress':result.get('progress')},ensure_ascii=False),flush=True)
     finally:
         manager.close()
 

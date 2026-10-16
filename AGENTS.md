@@ -60,7 +60,7 @@ python3 scripts/doctor.py
 python3 scripts/install.py --dry-run
 ```
 
-`doctor.py` 会检查 Python、平台、Codex、AGY 版本与必需调用参数，以及指定模型的可用性。
+`doctor.py` 会检查 Python、平台、Codex、AGY 版本与必需调用参数（含 `--json-schema` 和 `--input-format`），以及指定模型的可用性。
 它区分旧版 CLI、登录、网络错误、模型缺失和查询超时，并报告安全的退出码及检查阶段。
 CLI 不在 PATH 中时，doctor 也支持 `--codex`、`--agy`；安装参数使用同样的路径。
 `--dry-run` 只展示安装计划，不安装；模型列表可用也不等于实际推理成功。
@@ -180,6 +180,9 @@ python3 scripts/smoke.py --file-task --workspace . --timeout 180 --attempt-timeo
 开始前说明使用 Gemini Delegate，并明确双方分工。尽早异步提交，主智能体继续
 独立工作；依赖 Gemini 结果的步骤要等待并复核。交付时报告真实结果、任务 ID、
 失败与重试，不把排队或失败当成成功。
+文件快照由插件通过 stdin 一次性传入，不让模型逐轮读取清单和分块；任务仍应保持小而明确。
+日常调用省略 `max_attempts` 使用默认 3 次启动恢复，不要习惯性设为 1；仅用户明确要求完全不重试时设 1。
+读取 `progress` 区分启动、等待模型和处理；中间正文不回传，任何进度都不重置时限。
 
 默认总执行预算 40 秒，单次调用上限 25 秒，不逐次延长；读取、AGY 槽等待、退避和全部尝试共用期限。
 仅确认在启动阶段、15 秒内发生的临时连接失败自动重试，最多 3 次（首次加 2 次）。
@@ -188,6 +191,8 @@ python3 scripts/smoke.py --file-task --workspace . --timeout 180 --attempt-timeo
 `max_attempts` 可设 1–5；较大后台任务确有需要时显式调整 `timeout_seconds` 和
 `attempt_timeout_seconds`，不要给简单任务自动增加到数分钟。详见[重试说明](docs/RETRIES.md)。
 `retrying` 期间等待同一 ID；最终失败读取 `handoff`，再由主智能体接手。
+JSON／修改任务使用 AGY 原生 Schema 格式约束，再做本地校验；未返回原生结构化结果时不接受普通文本替代。
+数字和数组通过内部对象包装兼容，对调用者仍返回原本的 JSON 值。
 成功结果立即返回；中文会话改名在独立后台元数据进程中处理，不占模型并发槽、不增加模型问答。
 不要等待改名才使用模型结果，只有 `native_title.status: set` 才能报告改名成功。
 

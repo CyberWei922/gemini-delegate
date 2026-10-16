@@ -28,3 +28,11 @@ records. Uninstall retains jobs and backups so the user can recover work.
 AGY settings backups and the installation receipt are stored privately outside
 the repository. Do not publish them. The installer changes only its own jobs read
 grant and the declared extra-credit preference, preserving unrelated fields.
+
+## 1.7.0 输入与进度
+
+显式文件内容、上下文和公开来源整理成一个 UTF-8 提示，通过 stdin 交给官方 AGY；不进入命令行参数，
+不要求模型逐轮读取任务清单和分块。执行结束释放输入快照，原生输出 Schema 临时文件删除。
+流式事件仅保留阶段、时间、事件／步骤计数、工具名称和已报告用量；不保存或回传中间正文、思考内容、
+工具参数与工具输出。成功结果、失败诊断、备份及官方 AGY 自身的存储仍按原有机制保留。
+中断时可用步骤用量标为部分记录；与终态累计用量不会重复计算。
