@@ -38,7 +38,7 @@ class RuntimeConfigTests(unittest.TestCase):
         program = """import json,sys
 from pathlib import Path
 if '--conversation' in sys.argv:raise SystemExit(0)
-print(json.dumps({'event':'init','conversation_id':'ready'}),flush=True)
+print(json.dumps({'event':'init'}),flush=True)
 json.loads(sys.stdin.readline())
 value={'check':VALUE}
 native=value
@@ -127,7 +127,7 @@ p=Path(COUNTER);count=int(p.read_text())+1 if p.exists() else 1;p.write_text(str
 if count<3:
  print(json.dumps({'status':'ERROR','error':'Eligibility check failed: userinfo request: EOF'}))
  raise SystemExit(1)
-print(json.dumps({'event':'init','conversation_id':'ready'}),flush=True)
+print(json.dumps({'event':'init'}),flush=True)
 json.loads(sys.stdin.readline())
 print(json.dumps({'event':'result','result':{'status':'SUCCESS','response':'{"check":"GEMINI_OK"}','structured_output':{'check':'GEMINI_OK'}}}))
 '''.replace('COUNTER',repr(str(counter))),encoding='utf-8')

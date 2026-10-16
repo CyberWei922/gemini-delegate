@@ -22,7 +22,7 @@ from host_tools import WINDOWS, process_alive
 def stream_fixture(envelope,delay=0):
     return ('#!'+sys.executable+'\nimport json,sys,time\n'
             'if "--conversation" in sys.argv: raise SystemExit(0)\n'
-            'print(json.dumps({"event":"init","conversation_id":"fixture"}),flush=True)\n'
+            'print(json.dumps({"event":"init"}),flush=True)\n'
             'json.loads(sys.stdin.readline())\n'
             'time.sleep('+repr(delay)+')\n'
             'print(json.dumps({"event":"result","result":'+repr(envelope)+'}),flush=True)\n')
