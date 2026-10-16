@@ -37,7 +37,7 @@ MIN_ATTEMPT_SECONDS = 5
 DEFAULT_TIMEOUT_SECONDS = 40
 DEFAULT_MAX_ATTEMPTS = 3
 DEFAULT_ATTEMPT_SECONDS = 25
-STARTUP_RETRY_WINDOW_SECONDS = 15
+STARTUP_TIMEOUT_SECONDS = 10
 RETRYABLE_CODES = ('timeout','transient_error')
 DNS_CACHE = {}
 AGENT = '''---
@@ -200,12 +200,16 @@ def agy_failure(message):
     text = str(message)
     phase=('processing' if re.search(r'streamGenerateContent|generation|inference',text,re.I) else
            'startup' if re.search(r'Eligibility check failed|failed to (?:get|read) profile picture',text,re.I) else 'unknown')
-    details={'reported_phase':phase}
+    details={'reported_phase':phase,
+             'failure_stage':('eligibility' if re.search(r'Eligibility check failed',text,re.I) else
+                              'profile_picture' if re.search(r'failed to (?:get|read) profile picture',text,re.I) else phase)}
     if re.search(r'\b(?:401|403|429)\b|unauthori[sz]ed|invalid.grant|authentication|not authenticated|sign.in required|log.in required|permission denied|access denied|quota|resource.exhausted|rate.limit|billing|insufficient credits',text,re.I):
         return WorkerError('agy_failed',text[:800],details)
     if re.search(r'print timeout|deadline exceeded|timed? out|timeout',text,re.I):
+        details['failure_kind']='timeout'
         return WorkerError('timeout','AGY request timed out',details)
     if re.search(r'\bEOF\b|connection (?:reset|refused|closed)|broken pipe|temporary failure|temporarily unavailable|service unavailable|\b(?:502|503|504)\b|network is unreachable',text,re.I):
+        details['failure_kind']=('eof' if re.search(r'\bEOF\b',text,re.I) else 'connection_or_service')
         return WorkerError('transient_error','AGY reported a temporary network or service failure',details)
     return WorkerError('agy_failed',text[:800] or 'AGY did not complete',details)
 
@@ -214,10 +218,12 @@ def failure_phase(attempt, error):
     """Require positive preflight evidence; silence alone is not startup."""
     usage=attempt.get('usage') or {}
     stream=attempt.get('stream_progress') or {}
-    if (stream.get('processing_started') or
+    if (error.details.get('reported_phase')=='processing' or stream.get('processing_started') or
         ((attempt.get('agy_conversation_id') or attempt.get('agy_session_id')) and not stream.get('event_count')) or
         attempt.get('response_observed') or any(isinstance(v,(int,float)) and not isinstance(v,bool) and v>0 for v in usage.values())):
         return 'processing'
+    if attempt.get('task_input_sent') is False:
+        return 'startup'
     return error.details.get('reported_phase','unknown')
 
 
@@ -266,7 +272,8 @@ def decode_result(stdout, stderr, returncode, response_type='text', schema=None,
     return data, envelope.get('usage') or {}
 
 
-def run_process(argv, cwd, timeout, cancel=None, on_process=None, input_data=None, on_stdout=None):
+def run_process(argv, cwd, timeout, cancel=None, on_process=None, input_data=None, on_stdout=None,
+                input_ready=None, startup_timeout=None, on_input_sent=None):
     cancel = cancel or threading.Event()
     with managed_process(argv, cwd=cwd, stdin=subprocess.PIPE if input_data is not None else subprocess.DEVNULL,
                          stdout=subprocess.PIPE, stderr=subprocess.PIPE) as proc:
@@ -299,9 +306,16 @@ def run_process(argv, cwd, timeout, cancel=None, on_process=None, input_data=Non
         for reader in readers:
             reader.start()
         writer=None
+        input_gate=threading.Event();input_abort=threading.Event()
+        if input_ready is None:input_gate.set()
+        startup_end=min(end,time.monotonic()+startup_timeout) if startup_timeout is not None else end
         if input_data is not None:
+            if on_input_sent:on_input_sent(False)
             def write_input():
                 try:
+                    input_gate.wait()
+                    if input_abort.is_set():return
+                    if on_input_sent:on_input_sent(True)
                     proc.stdin.write(input_data);proc.stdin.flush()
                 except (BrokenPipeError,OSError):
                     pass # An early CLI error is returned through stdout/stderr.
@@ -310,6 +324,7 @@ def run_process(argv, cwd, timeout, cancel=None, on_process=None, input_data=Non
                     except OSError:pass
             writer=threading.Thread(target=write_input,daemon=True);writer.start()
         consumed=0
+        terminal_returncode=None
         try:
             while True:
                 with condition:
@@ -318,27 +333,52 @@ def run_process(argv, cwd, timeout, cancel=None, on_process=None, input_data=Non
                     failed = bool(errors)
                     fresh=bytes(buffers[0][consumed:]) if on_stdout else b''
                     consumed=len(buffers[0])
-                if fresh:on_stdout(fresh)
+                terminal_ready=bool(fresh and on_stdout(fresh))
                 if cancel.is_set():
                     raise WorkerError('cancelled', 'Task cancelled')
                 if sum(captured) > MAX_OUTPUT:
                     raise WorkerError('output_limit', 'AGY output exceeded the limit')
                 if failed:
                     raise WorkerError('process_io', 'Unable to read CLI output')
-                if done and proc.poll() is not None:
-                    return (*(bytes(data).decode('utf-8', 'replace') for data in buffers), proc.returncode)
+                if input_data is not None and not input_gate.is_set():
+                    if time.monotonic()>=startup_end:
+                        # No task bytes have been submitted, so this is positive
+                        # pre-inference evidence rather than a guess from silence.
+                        raise WorkerError('timeout','AGY initialization timed out before task submission',
+                                          {'reported_phase':'startup','failure_stage':'pre_input_startup',
+                                           'failure_kind':'timeout','task_input_sent':False,
+                                           'startup_timeout_seconds':round(startup_timeout or timeout,2)})
+                    if input_ready is not None and input_ready():input_gate.set()
                 left = end-time.monotonic()
                 if left <= 0:
                     raise WorkerError('timeout', 'Hard deadline reached; process tree stopped',
                                       {'timeout_seconds':round(timeout,2),
                                        'stdout_bytes':captured[0], 'stderr_bytes':captured[1]})
+                if terminal_ready:
+                    # A complete protocol result ends the turn. Do not wait for
+                    # EOF from lingering CLI descendants and then call success
+                    # a transport timeout. Cleanup still drains bounded stderr,
+                    # and the caller validates status/schema/partial markers.
+                    terminal_returncode=proc.poll() or 0
+                    try:terminal_returncode=proc.wait(timeout=min(.1,left))
+                    except subprocess.TimeoutExpired:pass
+                    break
+                if done and proc.poll() is not None:
+                    return (*(bytes(data).decode('utf-8', 'replace') for data in buffers), proc.returncode)
                 with condition:
-                    condition.wait(timeout=min(.05, left))
+                    startup_left=startup_end-time.monotonic() if not input_gate.is_set() else left
+                    condition.wait(timeout=max(0,min(.05,left,startup_left)))
         finally:
+            input_abort.set();input_gate.set()
             stop_process(proc)
             for reader in readers:
                 reader.join(timeout=3)
             if writer:writer.join(timeout=1)
+        if sum(map(len,buffers))>MAX_OUTPUT:
+            raise WorkerError('output_limit','AGY output exceeded the limit')
+        if on_stdout and len(buffers[0])>consumed:
+            on_stdout(bytes(buffers[0][consumed:]))
+        return (*(bytes(data).decode('utf-8','replace') for data in buffers),terminal_returncode)
 
 
 class TextParser(HTMLParser):
@@ -642,7 +682,8 @@ class Manager:
                'retry_policy':{'max_attempts':max_attempts,'total_timeout_seconds':timeout,
                                'initial_timeout_seconds':cap or self.attempt_seconds or DEFAULT_ATTEMPT_SECONDS,
                                'only_confirmed_startup_failures':True,
-                               'startup_retry_window_seconds':STARTUP_RETRY_WINDOW_SECONDS,
+                               'startup_retry_uses_remaining_budget':True,
+                               'startup_timeout_seconds':STARTUP_TIMEOUT_SECONDS,
                                'retryable_codes':list(RETRYABLE_CODES)},
                'status': 'queued', 'model': MODEL, 'created_at': time.time(),
                'root': str(root), 'workspace': str(workspace), 'files': files, 'args': args,
@@ -775,7 +816,9 @@ class Manager:
                                 self._persist_progress(job);last_progress_write[0]=time.monotonic()
                         stream=AgyStream(update_progress)
                         def consume(data):
-                            try:stream.feed(data)
+                            try:
+                                stream.feed(data)
+                                return stream.result is not None
                             except (ValueError,UnicodeError):
                                 raise WorkerError('invalid_stream','AGY returned an invalid streaming event')
                         try:
@@ -783,7 +826,10 @@ class Manager:
                             if run_budget <= 0:
                                 raise WorkerError('timeout', 'Task deadline reached before starting the process')
                             out, err, rc = run_process(argv, Path(job['workspace']), run_budget, job['cancel'], remember_process,
-                                                       input_data=input_data,on_stdout=consume)
+                                                       input_data=input_data,on_stdout=consume,
+                                                       input_ready=lambda:bool(stream.state.get('initialized')),
+                                                       startup_timeout=min(STARTUP_TIMEOUT_SECONDS,run_budget),
+                                                       on_input_sent=lambda sent:attempt_info.update(task_input_sent=sent))
                             # Process doubles/older startup errors can return one
                             # terminal envelope without a callback; never fake events.
                             if not stream.events and stream.result is None:consume(out.encode('utf-8'))
@@ -793,6 +839,8 @@ class Manager:
                             if terminal is None:
                                 if rc:decode_result('',err,rc)
                                 raise WorkerError('invalid_stream','AGY stream ended before its terminal result')
+                            if terminal.get('status')=='SUCCESS' and attempt_info.get('task_input_sent') is False:
+                                raise WorkerError('invalid_stream','AGY reported success before receiving task input')
                             out=json.dumps(terminal,ensure_ascii=False)
                         finally:
                             attempt_info['stream_progress']=stream.snapshot()
@@ -845,8 +893,10 @@ class Manager:
                     attempt_info['error_details'] = e.details
                     phase=failure_phase(attempt_info,e)
                     attempt_info['failure_phase']=phase
-                    startup_retry=(phase=='startup' and e.code in ('transient_error','timeout') and
-                                   attempt_info['elapsed_seconds']<=STARTUP_RETRY_WINDOW_SECONDS)
+                    # Elapsed time cannot turn a positively identified preflight
+                    # failure into model execution. Every replay still shares
+                    # the unchanged overall deadline and per-call cap.
+                    startup_retry=(phase=='startup' and e.code in ('transient_error','timeout'))
                     attempt_info['retry_eligible']=startup_retry
                     attempt_info['native_title']={'status':'skipped','reason':'Failed work is discarded without metadata delay'}
                     if not startup_retry or attempt+1>=max_attempts:
@@ -1030,10 +1080,10 @@ class Manager:
     def status(self):
         return {'plugin_version':VERSION,'model':MODEL,'agy':self.agy,'agy_available':Path(self.agy).is_file(),
                 'max_concurrent_agy_calls':self.max_concurrency,'context_mode':'independent',
-                'default_retry_policy':{'max_attempts':DEFAULT_MAX_ATTEMPTS,'total_timeout_seconds':DEFAULT_TIMEOUT_SECONDS,'initial_timeout_seconds':DEFAULT_ATTEMPT_SECONDS,'retryable_codes':list(RETRYABLE_CODES),'only_confirmed_startup_failures':True,'startup_retry_window_seconds':STARTUP_RETRY_WINDOW_SECONDS},
+                'default_retry_policy':{'max_attempts':DEFAULT_MAX_ATTEMPTS,'total_timeout_seconds':DEFAULT_TIMEOUT_SECONDS,'initial_timeout_seconds':DEFAULT_ATTEMPT_SECONDS,'retryable_codes':list(RETRYABLE_CODES),'only_confirmed_startup_failures':True,'startup_retry_uses_remaining_budget':True,'startup_timeout_seconds':STARTUP_TIMEOUT_SECONDS},
                 'conversation_workspace_policy':'AGY starts in the real project workspace; AGY manages native conversation storage',
                 'native_title_policy':'Background official /rename after result delivery, independent metadata lock; Windows transport unavailable',
-                'input_policy':'One bounded prompt via stdin; zero required model file reads',
+                'input_policy':'Wait for official init before one bounded stdin prompt; 10s pre-input gate; zero required model file reads',
                 'progress_policy':'Official stream-json metadata; progress never extends the deadline',
                 'structured_output_policy':'JSON/edit use official --json-schema; native structured_output and local validation are required',
                 'concurrency_scope':'Shared state directory; use one runtime generation per directory',

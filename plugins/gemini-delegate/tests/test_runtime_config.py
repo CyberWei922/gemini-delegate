@@ -37,12 +37,15 @@ class RuntimeConfigTests(unittest.TestCase):
     def make_agy(self,path,value):
         program = """import json,sys
 from pathlib import Path
+if '--conversation' in sys.argv:raise SystemExit(0)
+print(json.dumps({'event':'init'}),flush=True)
+json.loads(sys.stdin.readline())
 value={'check':VALUE}
 native=value
 if '--json-schema' in sys.argv:
  schema=json.loads(Path(sys.argv[sys.argv.index('--json-schema')+1]).read_text(encoding='utf-8'))
  if schema.get('properties')=={'value':{}}:native={'value':value}
-print(json.dumps({'status':'SUCCESS','response':json.dumps(value),'structured_output':native}))
+print(json.dumps({'event':'result','result':{'status':'SUCCESS','response':json.dumps(value),'structured_output':native}}))
 """.replace('VALUE',repr(value))
         path.write_text(program,encoding='utf-8');path.chmod(0o700)
 
@@ -117,13 +120,16 @@ print(json.dumps({'status':'SUCCESS','response':json.dumps(value),'structured_ou
 
     def test_fresh_mcp_retries_temporary_cli_failures_before_returning_success(self):
         counter=self.root/'calls.txt'
-        self.agy.write_text('''import json
+        self.agy.write_text('''import json,sys
 from pathlib import Path
+if '--conversation' in sys.argv:raise SystemExit(0)
 p=Path(COUNTER);count=int(p.read_text())+1 if p.exists() else 1;p.write_text(str(count))
 if count<3:
  print(json.dumps({'status':'ERROR','error':'Eligibility check failed: userinfo request: EOF'}))
  raise SystemExit(1)
-print(json.dumps({'status':'SUCCESS','response':'{"check":"GEMINI_OK"}','structured_output':{'check':'GEMINI_OK'}}))
+print(json.dumps({'event':'init'}),flush=True)
+json.loads(sys.stdin.readline())
+print(json.dumps({'event':'result','result':{'status':'SUCCESS','response':'{"check":"GEMINI_OK"}','structured_output':{'check':'GEMINI_OK'}}}))
 '''.replace('COUNTER',repr(str(counter))),encoding='utf-8')
         result=subprocess.run([sys.executable,str(REPO/'scripts/smoke.py'),'--plugin-root',str(self.plugin),'--workspace',str(self.root),'--timeout','30'],env=self.env,capture_output=True,text=True,encoding='utf-8',timeout=20)
         self.assertEqual(result.returncode,0,result.stderr+'\n'+result.stdout)

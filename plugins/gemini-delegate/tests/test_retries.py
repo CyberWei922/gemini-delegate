@@ -10,7 +10,7 @@ import unittest
 from unittest import mock
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'server'))
-from worker import Manager, WorkerError, decode_result
+from worker import Manager, WorkerError, decode_result, failure_phase
 from main import call
 
 
@@ -101,13 +101,40 @@ class RetryTests(unittest.TestCase):
         self.assertEqual(process.call_count,1)
         self.assertEqual(result['handoff']['reason'],'startup_not_confirmed')
 
-    def test_slow_preflight_does_not_get_repeated(self):
+    def test_confirmed_17_second_startup_failure_retries_with_remaining_budget(self):
+        clock=[0];count=[0]
+        def slow(*args,**kwargs):
+            count[0]+=1
+            if count[0]==1:
+                clock[0]=17.53
+                raise startup_error()
+            clock[0]+=16
+            return self.envelope()
+        with mock.patch('worker.time.monotonic',side_effect=lambda:clock[0]),mock.patch('worker.run_process',side_effect=slow) as process:
+            result=self.task()
+        self.assertEqual(process.call_count,2)
+        self.assertEqual(result['status'],'completed',result)
+        self.assertTrue(result['attempts'][0]['retry_eligible'])
+        self.assertAlmostEqual(result['attempts'][1]['timeout_seconds'],22.47,places=2)
+        self.assertLess(result['elapsed_seconds'],40)
+
+    def test_slow_startup_failure_does_not_retry_without_useful_remaining_budget(self):
         clock=[0]
-        def slow(*args,**kwargs):clock[0]=16;raise startup_error()
+        def slow(*args,**kwargs):clock[0]=36;raise startup_error()
         with mock.patch('worker.time.monotonic',side_effect=lambda:clock[0]),mock.patch('worker.run_process',side_effect=slow) as process:
             result=self.task()
         self.assertEqual(process.call_count,1)
-        self.assertFalse(result['attempts'][0]['retry_eligible'])
+        self.assertEqual(result['handoff']['reason'],'time_budget_exhausted')
+
+    def test_17_second_generation_failure_is_never_replayed(self):
+        clock=[0]
+        def slow(*args,**kwargs):
+            clock[0]=17.53
+            return json.dumps({'status':'ERROR','error':'streamGenerateContent: EOF'}),'',1
+        with mock.patch('worker.time.monotonic',side_effect=lambda:clock[0]),mock.patch('worker.run_process',side_effect=slow) as process:
+            result=self.task()
+        self.assertEqual(process.call_count,1)
+        self.assertEqual(result['handoff']['reason'],'mid_task_failure')
 
     def test_auth_quota_and_permission_failures_do_not_retry_even_with_eof(self):
         for message in ('401 unauthenticated EOF','quota exhausted: EOF','permission denied: EOF','429 rate limit: EOF'):
@@ -174,6 +201,18 @@ class RetryTests(unittest.TestCase):
 
 
 class FailureClassificationTests(unittest.TestCase):
+    def test_generation_failure_overrides_conflicting_no_input_metadata(self):
+        self.assertEqual(failure_phase({'task_input_sent':False},
+                         WorkerError('transient_error','Generation EOF',{'reported_phase':'processing'})),
+                         'processing')
+
+    def test_startup_failure_keeps_safe_stage_without_provider_urls_or_tokens(self):
+        with self.assertRaises(WorkerError) as caught:
+            decode_result('', 'Eligibility check failed: GET https://private.example/?token=DO_NOT_STORE: EOF', 1)
+        e=caught.exception
+        self.assertEqual(e.details,{'reported_phase':'startup','failure_stage':'eligibility','failure_kind':'eof'})
+        self.assertNotIn('DO_NOT_STORE',str(e)+json.dumps(e.details))
+
     def test_cli_stderr_network_failure_is_retryable_but_auth_is_not(self):
         for stderr,expected in [('request: EOF','transient_error'),('connection reset by peer','transient_error'),('503 Service Unavailable','transient_error'),('context deadline exceeded','timeout'),('401 permission denied; EOF','agy_failed')]:
             with self.subTest(stderr=stderr),self.assertRaises(WorkerError) as caught:

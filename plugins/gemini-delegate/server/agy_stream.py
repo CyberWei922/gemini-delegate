@@ -49,6 +49,7 @@ class AgyStream:
         self.state['last_event_at']=time.time()
         cid=event.get('conversation_id')
         if kind=='init':
+            self.state['initialized']=True
             self.state.setdefault('first_init_seconds',round(time.monotonic()-self.started,3))
         elif kind=='step_update':
             step=event.get('step_update')
@@ -80,6 +81,8 @@ class AgyStream:
             result=event.get('result')
             if not isinstance(result,dict):raise ValueError('Invalid terminal result')
             self.result=result
+            if result.get('status') in ('SUCCESS','ERROR'):
+                self.state['terminal_status']=result['status']
             cid=result.get('conversation_id') or cid
             if result.get('response') or result.get('structured_output') or any(v>0 for v in numeric_usage(result.get('usage')).values()):
                 self.state.update(phase='processing',processing_started=True)

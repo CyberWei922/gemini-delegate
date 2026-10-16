@@ -19,6 +19,30 @@ def event(kind,**values):
 
 
 class ParserTests(unittest.TestCase):
+    def test_no_task_bytes_are_written_until_official_init(self):
+        code="import json,time,sys;time.sleep(.2);print(json.dumps({'event':'init'}),flush=True);d=sys.stdin.buffer.readline();print(json.dumps({'event':'result','result':{'status':'SUCCESS','response':d.decode().strip()}}),flush=True)"
+        s=AgyStream();sent=[]
+        def feed(data):s.feed(data);return s.result is not None
+        out,err,rc=run_process([sys.executable,'-c',code],Path.home(),5,
+                              input_data=b'TASK_DATA\n',on_stdout=feed,
+                              input_ready=lambda:s.state.get('initialized'),startup_timeout=2,
+                              on_input_sent=sent.append)
+        self.assertEqual(s.finish()['response'],'TASK_DATA')
+        self.assertEqual(sent,[False,True])
+
+    def test_stalled_startup_times_out_without_submitting_any_task_bytes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            marker=Path(directory)/'received'
+            code='import sys,time;from pathlib import Path;b=sys.stdin.buffer.read(1);Path('+repr(str(marker))+').write_bytes(b);time.sleep(30)'
+            sent=[]
+            with self.assertRaises(WorkerError) as caught:
+                run_process([sys.executable,'-c',code],Path.home(),5,input_data=b'TASK_DATA\n',
+                            input_ready=lambda:False,startup_timeout=.5,on_input_sent=sent.append)
+            self.assertEqual(caught.exception.details['reported_phase'],'startup')
+            self.assertFalse(caught.exception.details['task_input_sent'])
+            self.assertEqual(marker.read_bytes() if marker.exists() else b'',b'')
+            self.assertEqual(sent,[False])
+
     def test_split_utf8_chunks_and_private_text_are_not_progress_metadata(self):
         s=AgyStream()
         data=event('init',conversation_id='native')+event('step_update',step_update={
@@ -66,6 +90,35 @@ class ParserTests(unittest.TestCase):
                               input_data=body,on_stdout=s.feed)
         self.assertEqual(rc,0);self.assertEqual(s.finish()['response'],str(len(prompt)))
 
+    def test_complete_terminal_does_not_wait_for_a_lingering_process(self):
+        code="import json,time;print(json.dumps({'event':'result','result':{'status':'SUCCESS','response':'COMPLETE'}}),flush=True);time.sleep(30)"
+        s=AgyStream()
+        def feed(data):s.feed(data);return s.result is not None
+        before=time.monotonic()
+        out,err,rc=run_process([sys.executable,'-c',code],Path.home(),5,on_stdout=feed)
+        self.assertLess(time.monotonic()-before,3)
+        self.assertEqual(rc,0)
+        self.assertEqual(s.finish()['response'],'COMPLETE')
+        self.assertEqual(s.snapshot()['terminal_status'],'SUCCESS')
+
+    def test_terminal_error_never_becomes_success_when_process_lingers(self):
+        from worker import decode_result
+        code="import json,time;print(json.dumps({'event':'result','result':{'status':'ERROR','error':'streamGenerateContent: EOF','response':'PARTIAL'}}),flush=True);time.sleep(30)"
+        s=AgyStream()
+        def feed(data):s.feed(data);return s.result is not None
+        out,err,rc=run_process([sys.executable,'-c',code],Path.home(),5,on_stdout=feed)
+        self.assertEqual(s.snapshot()['terminal_status'],'ERROR')
+        with self.assertRaises(WorkerError):decode_result(json.dumps(s.finish()),err,rc)
+
+    def test_terminal_success_still_rejects_cli_partial_output_warning(self):
+        from worker import decode_result
+        code="import json,time,sys;print('print timeout; returning partial output',file=sys.stderr,flush=True);print(json.dumps({'event':'result','result':{'status':'SUCCESS','response':'PARTIAL'}}),flush=True);time.sleep(30)"
+        s=AgyStream()
+        def feed(data):s.feed(data);return s.result is not None
+        out,err,rc=run_process([sys.executable,'-c',code],Path.home(),5,on_stdout=feed)
+        with self.assertRaises(WorkerError) as caught:decode_result(json.dumps(s.finish()),err,rc)
+        self.assertEqual(caught.exception.code,'timeout')
+
 
 class WorkflowStreamTests(unittest.TestCase):
     def setUp(self):
@@ -80,6 +133,17 @@ class WorkflowStreamTests(unittest.TestCase):
             jid=self.m.submit({'instruction':'Return OK','workspace':str(self.root),**options})['task_id']
             r=self.m.result(jid,5)
         return r,calls
+
+    def test_success_without_task_submission_is_not_accepted(self):
+        def run(*args,**kw):
+            kw['on_input_sent'](False)
+            kw['on_stdout'](event('result',result={'status':'SUCCESS','response':'UNRELATED'}))
+            return '','',0
+        r,calls=self.task(run)
+        self.assertEqual(r['status'],'failed')
+        self.assertEqual(r['error']['code'],'invalid_stream')
+        self.assertIsNone(r['result'])
+        self.assertEqual(calls.call_count,1)
 
     def test_live_progress_visible_to_another_manager_before_result(self):
         entered=threading.Event();release=threading.Event()
@@ -151,8 +215,8 @@ class WorkflowStreamTests(unittest.TestCase):
     def test_continuous_real_progress_never_renews_the_deadline(self):
         fake=self.root/'progress.py'
         fake.write_text('''import json,sys,time
-json.loads(sys.stdin.readline())
 print(json.dumps({'event':'init','conversation_id':'native'}),flush=True)
+json.loads(sys.stdin.readline())
 for i in range(300):
  print(json.dumps({'event':'step_update','step_update':{'step_index':1,'step_type':'agent_response','state':'ACTIVE','text_delta':'PRIVATE_INTERMEDIATE'}}),flush=True)
  time.sleep(.03)

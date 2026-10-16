@@ -19,6 +19,15 @@ from main import call
 from host_tools import WINDOWS, process_alive
 
 
+def stream_fixture(envelope,delay=0):
+    return ('#!'+sys.executable+'\nimport json,sys,time\n'
+            'if "--conversation" in sys.argv: raise SystemExit(0)\n'
+            'print(json.dumps({"event":"init"}),flush=True)\n'
+            'json.loads(sys.stdin.readline())\n'
+            'time.sleep('+repr(delay)+')\n'
+            'print(json.dumps({"event":"result","result":'+repr(envelope)+'}),flush=True)\n')
+
+
 class ResultTests(unittest.TestCase):
     def error(self,code,fn,*args):
         with self.assertRaises(WorkerError) as c:fn(*args)
@@ -126,7 +135,7 @@ class WorkflowTests(unittest.TestCase):
         payload={'summary':'Changed sample','files':[{'path':'sample.txt','content':'new\n'}]}
         envelope={'status':'SUCCESS','response':json.dumps(payload),'structured_output':payload,
                   'usage':{'input_tokens':100,'output_tokens':20}}
-        self.worker.write_text('#!'+sys.executable+'\nimport json\nprint(json.dumps('+repr(envelope)+'))\n',encoding='utf-8')
+        self.worker.write_text(stream_fixture(envelope),encoding='utf-8')
         self.worker.chmod(0o700)
         self.manager=Manager(self.root/'state',str(self.worker),attempt_seconds=2,max_concurrency=1)
 
@@ -167,7 +176,7 @@ class WorkflowTests(unittest.TestCase):
             with self.assertRaises(WorkerError):self.manager.submit({'instruction':'read','workspace':str(self.workspace),'input_files':[filename]})
 
     def test_bad_output_is_discarded_without_replaying_work(self):
-        self.worker.write_text('#!'+sys.executable+'\nimport json\nprint(json.dumps({"status":"SUCCESS","response":""}))\n', encoding='utf-8')
+        self.worker.write_text(stream_fixture({'status':'SUCCESS','response':''}),encoding='utf-8')
         jid=self.manager.submit({'instruction':'extract','timeout_seconds':15})['task_id']
         result=self.manager.result(jid,10)
         self.assertEqual(result['status'],'failed')
@@ -308,7 +317,7 @@ class WorkflowTests(unittest.TestCase):
         finally:second.close()
 
     def test_live_task_records_are_project_scoped_and_keep_preview(self):
-        self.worker.write_text('#!'+sys.executable+'\nimport time,json\ntime.sleep(.4)\nprint(json.dumps({"status":"SUCCESS","response":"DONE"}))\n', encoding='utf-8')
+        self.worker.write_text(stream_fixture({'status':'SUCCESS','response':'DONE'},.4),encoding='utf-8')
         info=call(self.manager,'delegate_task',{'title':'Visible task','instruction':'Return DONE','context':'PRIVATE_CONTEXT','workspace':str(self.workspace),'timeout_seconds':15})
         early=call(self.manager,'list_tasks',{'workspace':str(self.workspace)})
         self.assertEqual(len(early['tasks']),1)
@@ -324,7 +333,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn('agy_started_at',later['tasks'][0])
 
     def test_local_task_is_visible_without_readable_snapshot(self):
-        self.worker.write_text('import time,json;time.sleep(.2);print(json.dumps({"status":"SUCCESS","response":"DONE"}))',encoding='utf-8')
+        self.worker.write_text(stream_fixture({'status':'SUCCESS','response':'DONE'},.2),encoding='utf-8')
         info=self.manager.submit({'instruction':'Return DONE','context':'PRIVATE_CONTEXT','workspace':str(self.workspace)})
         with mock.patch('dashboard.read_tasks',return_value=[]):
             listing=self.manager.task_list(str(self.workspace))
@@ -336,7 +345,7 @@ class WorkflowTests(unittest.TestCase):
             self.assertEqual(self.manager.task_list()['tasks'][0]['result_preview'],'"DONE"')
 
     def test_live_task_visible_to_another_manager_during_updates(self):
-        self.worker.write_text('import time,json;time.sleep(.2);print(json.dumps({"status":"SUCCESS","response":"DONE"}))',encoding='utf-8')
+        self.worker.write_text(stream_fixture({'status':'SUCCESS','response':'DONE'},.2),encoding='utf-8')
         reader=Manager(self.manager.state,str(self.worker))
         try:
             info=self.manager.submit({'instruction':'Return DONE','context':'PRIVATE_CONTEXT','workspace':str(self.workspace)})
