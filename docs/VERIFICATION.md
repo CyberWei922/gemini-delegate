@@ -27,6 +27,9 @@ The 25-second call/40-second total defaults and startup-only retry window are un
 - `111d500871ec440a`: two real input files, exact names/versions extracted once
   in 15.16s, 8,165 reported tokens. All source contents were sent in stdin, with
   zero required model file-read calls; five official stream events were observed.
+- `938c0a37ed2d426d`: the public MCP `smoke.py --file-task` flow completed once
+  in 15.47s, 8,282 reported tokens; both manifest entries matched, native JSON
+  and terminal events validated, and observed `file_read_steps` was zero.
 - `b0e40b7e145f403a`: two controlled local preflight EOF result events (not Google
   failures or model calls), then one real High response. Exact STARTUP_RECOVERED
   matched on attempt 3, total 16.03s, 7,120 reported tokens. Call caps stayed 25s;

@@ -157,10 +157,10 @@ codex plugin list --json
 python3 scripts/smoke.py
 ```
 
-需要确认较大文件分块读取时，再运行：
+可选验证双文件的一次性输入，沿用默认短时限：
 
 ```sh
-python3 scripts/smoke.py --file-task --workspace . --timeout 180 --attempt-timeout 150
+python3 scripts/smoke.py --file-task --workspace .
 ```
 
 当前会话没加载 MCP 工具时，使用安装目录中的
