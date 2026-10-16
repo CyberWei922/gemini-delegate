@@ -19,10 +19,11 @@ at 6.29s on macOS; this is not a model turn or shared task history.
 
 ## Verification scope
 
-- 144 runtime tests passed on macOS (4 Windows-only skips), 14 installer tests.
+- 145 runtime tests passed on macOS (4 Windows-only skips), 14 installer tests.
   New coverage includes 17.53s confirmed startup recovery, insufficient remaining
   budget, slow generation failure without replay, safe failure diagnostics and
-  terminal cleanup without waiting for a lingering process.
+  terminal cleanup without waiting for a lingering process; success before task
+  submission is rejected.
 - Real official Gemini High extractions from three keyboard-related source files:
   `5bd41fc06f2b486d` 22.48s, `d53b8b6a98474be9` 21.59s and
   `56acf3407bc6467a` 19.22s. Each completed once and the full ordered function-name

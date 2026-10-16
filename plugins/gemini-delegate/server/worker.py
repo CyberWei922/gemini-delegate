@@ -839,6 +839,8 @@ class Manager:
                             if terminal is None:
                                 if rc:decode_result('',err,rc)
                                 raise WorkerError('invalid_stream','AGY stream ended before its terminal result')
+                            if terminal.get('status')=='SUCCESS' and attempt_info.get('task_input_sent') is False:
+                                raise WorkerError('invalid_stream','AGY reported success before receiving task input')
                             out=json.dumps(terminal,ensure_ascii=False)
                         finally:
                             attempt_info['stream_progress']=stream.snapshot()

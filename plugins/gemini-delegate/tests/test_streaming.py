@@ -40,7 +40,7 @@ class ParserTests(unittest.TestCase):
                             input_ready=lambda:False,startup_timeout=.5,on_input_sent=sent.append)
             self.assertEqual(caught.exception.details['reported_phase'],'startup')
             self.assertFalse(caught.exception.details['task_input_sent'])
-            self.assertFalse(marker.exists())
+            self.assertEqual(marker.read_bytes() if marker.exists() else b'',b'')
             self.assertEqual(sent,[False])
 
     def test_split_utf8_chunks_and_private_text_are_not_progress_metadata(self):
@@ -133,6 +133,17 @@ class WorkflowStreamTests(unittest.TestCase):
             jid=self.m.submit({'instruction':'Return OK','workspace':str(self.root),**options})['task_id']
             r=self.m.result(jid,5)
         return r,calls
+
+    def test_success_without_task_submission_is_not_accepted(self):
+        def run(*args,**kw):
+            kw['on_input_sent'](False)
+            kw['on_stdout'](event('result',result={'status':'SUCCESS','response':'UNRELATED'}))
+            return '','',0
+        r,calls=self.task(run)
+        self.assertEqual(r['status'],'failed')
+        self.assertEqual(r['error']['code'],'invalid_stream')
+        self.assertIsNone(r['result'])
+        self.assertEqual(calls.call_count,1)
 
     def test_live_progress_visible_to_another_manager_before_result(self):
         entered=threading.Event();release=threading.Event()
